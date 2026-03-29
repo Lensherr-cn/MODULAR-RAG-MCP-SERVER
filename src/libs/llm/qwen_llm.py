@@ -43,6 +43,7 @@ class QwenLLM(BaseLLM):
             settings: Any,
             api_key: Optional[str] = None,
             base_url: Optional[str] = None,
+            llm_config: Optional[Any] = None,  # 新增参数
             **kwargs: Any,
     ) -> None:
         """Initialize the Qwen LLM provider.
@@ -51,16 +52,28 @@ class QwenLLM(BaseLLM):
             settings: Application settings containing LLM configuration.
             api_key: Optional API key override (falls back to env var QWEN_API_KEY).
             base_url: Optional base URL override.
+            llm_config: Optional specific LLM config (for additional_llms support).
             **kwargs: Additional configuration overrides.
 
         Raises:
             ValueError: If API key is not provided and not found in environment.
         """
-        self.model = settings.llm.model
-        self.default_temperature = settings.llm.temperature
-        self.default_max_tokens = settings.llm.max_tokens
+        # 支持从 additional_llms 或主 llm 配置加载
+        if llm_config is not None:
+            # 使用传入的特定配置
+            llm_settings = llm_config
+        elif hasattr(settings, 'additional_llms') and settings.additional_llms and 'qwen' in settings.additional_llms:
+            # 自动从 additional_llms 中获取 qwen 配置
+            llm_settings = settings.additional_llms['qwen']
+        else:
+            # 回退到主 llm 配置
+            llm_settings = settings.llm
 
-        # API key: explicit > env var
+        self.model = llm_settings.model
+        self.default_temperature = llm_settings.temperature
+        self.default_max_tokens = llm_settings.max_tokens
+
+        # API key: explicit > env var > config
         self.api_key = api_key or os.getenv("QWEN_API_KEY")
         if not self.api_key:
             raise ValueError(
@@ -68,7 +81,7 @@ class QwenLLM(BaseLLM):
                 "or pass api_key parameter."
             )
 
-        # Base URL: explicit > default
+        # Base URL: explicit > config > default
         self.base_url = base_url or self.DEFAULT_BASE_URL
 
         # Store any additional kwargs for future use

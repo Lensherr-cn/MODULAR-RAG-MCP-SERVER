@@ -29,14 +29,47 @@ def test_qwen_connection():
     print("=" * 50)
 
     # Load settings
+    # try:
+    #     settings = load_settings(project_root / "config" / "settings.yaml")
+    #     print(f"✓ Settings loaded")
+    #     print(f"  Model: {settings.llm.model}")
+    #     print(f"  Temperature: {settings.llm.temperature}")
+    #     print(f"  Max tokens: {settings.llm.max_tokens}")
+    # except Exception as e:
+    #     print(f"✗ ERROR loading settings: {e}")
+    #     return False
     try:
         settings = load_settings(project_root / "config" / "settings.yaml")
         print(f"✓ Settings loaded")
-        print(f"  Model: {settings.llm.model}")
-        print(f"  Temperature: {settings.llm.temperature}")
-        print(f"  Max tokens: {settings.llm.max_tokens}")
+
+        # 尝试从 additional_llms 获取 Qwen 配置
+        qwen_config = None
+        if settings.additional_llms and "qwen" in settings.additional_llms:
+            qwen_config = settings.additional_llms["qwen"]
+            print(f"  Found Qwen in additional_llms")
+        else:
+            # 回退到主 llm 配置
+            qwen_config = settings.llm
+            print(f"  Using main llm configuration")
+
+        print(f"  Provider: {qwen_config.provider}")
+        print(f"  Model: {qwen_config.model}")
+        print(f"  Temperature: {qwen_config.temperature}")
+        print(f"  Max tokens: {qwen_config.max_tokens}")
     except Exception as e:
         print(f"✗ ERROR loading settings: {e}")
+        return False
+
+        # Create Qwen LLM instance directly with specific config
+    try:
+        llm = QwenLLM(settings=settings, llm_config=qwen_config)
+        print(f"✓ QwenLLM instance created")
+        print(f"  Base URL: {llm.base_url}")
+    except ValueError as e:
+        print(f"✗ ERROR creating LLM: {e}")
+        return False
+    except Exception as e:
+        print(f"✗ Unexpected error: {e}")
         return False
 
     # Create Qwen LLM instance directly
@@ -52,7 +85,7 @@ def test_qwen_connection():
         return False
 
     # Test chat completion
-    test_message = "你好，请用日语回复一句简短的问候。"
+    test_message = "你好，请用中文回复一句简短的问候。"
     print(f"\nSending test message: '{test_message}'")
 
     try:
