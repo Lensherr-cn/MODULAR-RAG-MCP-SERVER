@@ -11,6 +11,18 @@ llm:
   temperature: 0.0
   max_tokens: 4096
 
+additional_llms:
+  qwen:
+    provider: "openai"
+    model: "qwen3.5-plus"
+    temperature: 1.3
+    max_tokens: 4096
+  glm:
+    provider: "openai"
+    model: "glm-5.1"
+    temperature: 0.0
+    max_tokens: 4096
+
 # =============================================================================
 # Embedding Configuration
 # =============================================================================
