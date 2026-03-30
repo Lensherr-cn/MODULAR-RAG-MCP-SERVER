@@ -10,10 +10,10 @@ from my_llm import llm
 # print("=" * 60)
 
 # 流式输出测试
-# context = ""
-# # for chunk in llm.stream("为什么我的眼里常含着泪水"):
-# #     if  ""!=chunk.content:
-# #         context += chunk.content
-# # print(context)
+context = ""
+for chunk in llm.stream("为什么我的眼里常含着泪水"):
+    if  ""!=chunk.content:
+        context += chunk.content
+print(context)
 
 
