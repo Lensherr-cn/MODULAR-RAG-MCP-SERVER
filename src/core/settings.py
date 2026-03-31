@@ -187,6 +187,7 @@ class Settings:
     evaluation: EvaluationSettings
     observability: ObservabilitySettings
     additional_llms: Optional[Dict[str, LLMSettings]] = None
+    additional_embeddings: Optional[Dict[str, EmbeddingSettings]] = None
     ingestion: Optional[IngestionSettings] = None
     vision_llm: Optional[VisionLLMSettings] = None
 
@@ -216,6 +217,25 @@ class Settings:
                             model=_require_str(config, "model", f"additional_llms.{name}"),
                             temperature=_require_number(config, "temperature", f"additional_llms.{name}"),
                             max_tokens=_require_int(config, "max_tokens", f"additional_llms.{name}"),
+                            api_key=config.get("api_key"),
+                            api_version=config.get("api_version"),
+                            azure_endpoint=config.get("azure_endpoint"),
+                            deployment_name=config.get("deployment_name"),
+                            base_url=config.get("base_url"),
+                        )
+
+        # 加载额外的 Embedding 配置
+        additional_embeddings_settings = None
+        if "additional_embeddings" in data:
+            additional_embeddings_data = data["additional_embeddings"]
+            if isinstance(additional_embeddings_data, dict):
+                additional_embeddings_settings = {}
+                for name, config in additional_embeddings_data.items():
+                    if isinstance(config, dict):
+                        additional_embeddings_settings[name] = EmbeddingSettings(
+                            provider=_require_str(config, "provider", f"additional_embeddings.{name}"),
+                            model=_require_str(config, "model", f"additional_embeddings.{name}"),
+                            dimensions=_require_int(config, "dimensions", f"additional_embeddings.{name}"),
                             api_key=config.get("api_key"),
                             api_version=config.get("api_version"),
                             azure_endpoint=config.get("azure_endpoint"),
@@ -303,6 +323,7 @@ class Settings:
             ingestion=ingestion_settings,
             vision_llm=vision_llm_settings,
             additional_llms=additional_llms_settings,
+            additional_embeddings=additional_embeddings_settings,
         )
 
         return settings

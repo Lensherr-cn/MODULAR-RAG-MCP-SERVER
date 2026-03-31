@@ -7,6 +7,7 @@ This package contains LLM client abstractions and implementations:
 - LLM factory
 - Provider implementations (OpenAI, Azure, Ollama, DeepSeek)
 """
+from src.libs.llm.glm_llm import GlmLLM, GlmLLMError
 from src.libs.llm.qwen_llm import QwenLLM, QwenLLMError
 from src.libs.llm.base_llm import BaseLLM, ChatResponse, Message
 from src.libs.llm.base_vision_llm import BaseVisionLLM, ImageInput
@@ -23,6 +24,7 @@ LLMFactory.register_provider("azure", AzureLLM)
 LLMFactory.register_provider("deepseek", DeepSeekLLM)
 LLMFactory.register_provider("ollama", OllamaLLM)
 LLMFactory.register_provider("qwen", QwenLLM)
+LLMFactory.register_provider("glm", GlmLLM)
 
 # Note: Vision LLM providers will be registered in task B9+
 
@@ -47,6 +49,8 @@ __all__ = [
     "OllamaLLMError",
     "QwenLLM",
     "QwenLLMError",
+    "GlmLLM",
+    "GlmLLMError",
     # Vision LLM implementations
     "OpenAIVisionLLM",
     "OpenAIVisionLLMError",
