@@ -18,6 +18,7 @@ load_dotenv(project_root / ".env")
 
 from src.core.settings import load_settings
 from src.libs.embedding.qwen_embedding import QwenEmbedding, QwenEmbeddingError
+from src.libs.vector_store.chroma_store import ChromaStore
 
 
 def test_qwen_embedding_connection():
@@ -175,6 +176,86 @@ def test_qwen_embedding_connection():
     return True
 
 
+def test_store_to_chroma():
+    """Test storing embeddings to ChromaDB."""
+    print(f"\n\n{'=' * 60}")
+    print("Bonus Test: Store Embeddings to ChromaDB")
+    print(f"{'=' * 60}")
+
+    try:
+        settings = load_settings(project_root / "config" / "settings.yaml")
+        embedding = QwenEmbedding(settings=settings)
+
+        # 准备测试文档
+        documents = [
+            {"id": "doc_1", "text": "人工智能是计算机科学的一个分支。"},
+            {"id": "doc_2", "text": "机器学习使用算法来从数据中学习。"},
+            {"id": "doc_3", "text": "深度学习是机器学习的子领域。"},
+        ]
+
+        print(f"\n准备存储 {len(documents)} 个文档到 ChromaDB...")
+
+        # 生成向量
+        texts = [doc["text"] for doc in documents]
+        embeddings_list = embedding.embed(texts)
+
+        # 构建记录
+        records = []
+        for doc, emb in zip(documents, embeddings_list):
+            record = {
+                "id": doc["id"],
+                "vector": emb,
+                "metadata": {
+                    "text": doc["text"],
+                    "source": "test_script",
+                }
+            }
+            records.append(record)
+            print(f"  - {doc['id']}: 向量维度 {len(emb)}")
+
+        # 初始化 ChromaDB
+        print(f"\n初始化 ChromaDB...")
+        chroma_store = ChromaStore(settings=settings)
+        print(f"  ✓ ChromaDB 初始化成功")
+        print(f"  - 集合名称：{chroma_store.collection_name}")
+        print(f"  - 存储路径：{chroma_store.persist_directory}")
+
+        # 存储向量
+        print(f"\n存储向量到 ChromaDB...")
+        chroma_store.upsert(records)
+        print(f"  ✓ 成功存储 {len(records)} 条记录")
+
+        # 验证存储
+        stats = chroma_store.get_collection_stats()
+        print(f"  - 集合中总记录数：{stats['count']}")
+
+        # 简单查询测试
+        print(f"\n查询测试...")
+        query_text = "什么是人工智能？"
+        query_embedding = embedding.embed([query_text])[0]
+
+        results = chroma_store.query(vector=query_embedding, top_k=2)
+        print(f"  查询：'{query_text}'")
+        print(f"  找到 {len(results)} 个相关结果:")
+        for i, result in enumerate(results, 1):
+            print(f"    {i}. {result['text']} (相似度：{result['score']:.4f})")
+
+        print(f"\n✓ ChromaDB 存储测试成功!")
+        return True
+
+    except Exception as e:
+        print(f"✗ ChromaDB 存储测试失败：{e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
 if __name__ == "__main__":
     success = test_qwen_embedding_connection()
+    if success:
+        print("\n是否继续测试 ChromaDB 存储？(y/n): ", end="")
+        response = input().strip().lower()
+        if response == 'y':
+            chroma_success = test_store_to_chroma()
+            success = success and chroma_success
+
     sys.exit(0 if success else 1)
