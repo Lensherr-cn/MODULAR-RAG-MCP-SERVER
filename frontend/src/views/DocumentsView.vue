@@ -144,6 +144,7 @@ const loadDocuments = async () => {
       page_size: pageSize.value,
       category: selectedCategory.value || undefined,
       keyword: searchKeyword.value || undefined,
+      file_type: selectedFileType.value || undefined,
     })
     if (data.data) {
       documents.value = data.data.items

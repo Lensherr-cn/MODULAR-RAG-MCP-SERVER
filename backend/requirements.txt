@@ -1,0 +1,31 @@
+# Backend Requirements
+# 企业知识库后端依赖
+
+# FastAPI框架
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+python-multipart==0.0.6
+
+# 数据验证
+pydantic==2.5.3
+pydantic-settings==2.1.0
+
+# 工具库
+python-dotenv==1.0.0
+pyyaml==6.0.1
+
+# 类型支持
+typing-extensions==4.9.0
+
+# 文档解析依赖
+PyPDF2>=3.0.0
+python-docx>=1.1.0
+
+# 项目已有依赖（从pyproject.toml）
+# 这些依赖已在项目根目录安装，这里列出来源参考
+# chromadb>=0.4.0
+# sentence-transformers>=2.2.0
+# openai>=1.0.0
+# rank-bm25>=0.2.2
+# pypdf>=4.0.0
+# markdown>=3.5.0
