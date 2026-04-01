@@ -4,8 +4,8 @@ Stats API - 统计接口
 from typing import Optional
 from fastapi import APIRouter, Query
 
-from backend.app.schemas import ApiResponse
-from backend.app.services import stats_service
+from app.schemas import ApiResponse
+from app.services import stats_service
 
 router = APIRouter()
 

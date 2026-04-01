@@ -4,9 +4,9 @@ Documents API - 文档接口
 from typing import Optional
 from fastapi import APIRouter, Query, UploadFile, File
 
-from backend.app.schemas import ApiResponse
-from backend.app.schemas.document import DocumentListResponse, CategoryListResponse
-from backend.app.services.document_service import document_service
+from app.schemas import ApiResponse
+from app.schemas.document import DocumentListResponse, CategoryListResponse
+from app.services.document_service import document_service
 
 router = APIRouter()
 

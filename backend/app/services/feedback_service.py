@@ -1,43 +1,31 @@
 """
-Feedback Service - 用户反馈服务
+Feedback Service - 用户反馈服务 (MySQL版本)
+重构为使用SQLAlchemy ORM进行MySQL持久化
 """
 import uuid
-import json
 from typing import List, Optional, Dict, Any
 from datetime import datetime
-from pathlib import Path
+from sqlalchemy import desc
+
+from app.models.user import Feedback
 
 
 class FeedbackService:
-    """反馈服务"""
+    """反馈服务 - MySQL版本"""
 
     def __init__(self):
-        self.data_dir = Path(__file__).resolve().parents[2] / "data"
-        self.data_dir.mkdir(exist_ok=True)
-        self.feedback_file = self.data_dir / "feedback.json"
-        self.feedback_list: List[Dict] = []
-        self._load_feedback()
+        pass
 
-    def _load_feedback(self):
-        """加载反馈数据"""
-        if self.feedback_file.exists():
-            try:
-                with open(self.feedback_file, 'r', encoding='utf-8') as f:
-                    self.feedback_list = json.load(f)
-            except Exception:
-                self.feedback_list = []
-        else:
-            self.feedback_list = []
+    def _get_db(self):
+        """获取数据库会话"""
+        from app.core.database import SessionLocal
+        return SessionLocal()
 
-    def _save_feedback(self):
-        """保存反馈数据"""
-        try:
-            with open(self.feedback_file, 'w', encoding='utf-8') as f:
-                json.dump(self.feedback_list, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            print(f"Error saving feedback: {e}")
-
-    def create_feedback(self, feedback_data: Dict[str, Any]) -> Dict[str, Any]:
+    def create_feedback(
+        self,
+        feedback_data: Dict[str, Any],
+        user_id: Optional[str] = None
+    ) -> Dict[str, Any]:
         """
         创建反馈
 
@@ -50,34 +38,58 @@ class FeedbackService:
                 "conversation_id": str,
                 "message_id": str
             }
+            user_id: 用户ID（可选）
 
         Returns:
             创建的反馈记录
         """
-        feedback_id = str(uuid.uuid4())
-        now = datetime.now().isoformat()
+        db = self._get_db()
+        try:
+            # 如果没有用户ID，获取默认用户
+            if not user_id:
+                from app.services.user_service import user_service
+                user_id = user_service.get_or_create_default_user()
 
-        feedback = {
-            "id": feedback_id,
-            "query": feedback_data.get("query"),
-            "answer": feedback_data.get("answer"),
-            "feedback_type": feedback_data.get("feedback_type", "comment"),
-            "content": feedback_data.get("content"),
-            "conversation_id": feedback_data.get("conversation_id"),
-            "message_id": feedback_data.get("message_id"),
-            "created_at": now
-        }
+            # 将 feedback_type 转换为数据库格式
+            fb_type = feedback_data.get("feedback_type", "comment")
+            if fb_type == "like":
+                db_type = "positive"
+            elif fb_type == "dislike":
+                db_type = "negative"
+            else:
+                db_type = "suggestion"
 
-        self.feedback_list.append(feedback)
-        self._save_feedback()
+            feedback = Feedback(
+                id=str(uuid.uuid4()),
+                user_id=user_id,
+                content=feedback_data.get("content", ""),
+                feedback_type=db_type,
+                query_id=feedback_data.get("conversation_id")  # 临时使用conversation_id
+            )
 
-        return feedback
+            db.add(feedback)
+            db.commit()
+            db.refresh(feedback)
+
+            return {
+                "id": feedback.id,
+                "query": feedback_data.get("query"),
+                "answer": feedback_data.get("answer"),
+                "feedback_type": fb_type,
+                "content": feedback.content,
+                "conversation_id": feedback_data.get("conversation_id"),
+                "message_id": feedback_data.get("message_id"),
+                "created_at": feedback.created_at.isoformat() if feedback.created_at else None
+            }
+        finally:
+            db.close()
 
     def get_feedback_list(
         self,
         page: int = 1,
         page_size: int = 20,
-        feedback_type: Optional[str] = None
+        feedback_type: Optional[str] = None,
+        user_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         获取反馈列表
@@ -86,6 +98,7 @@ class FeedbackService:
             page: 页码
             page_size: 每页数量
             feedback_type: 反馈类型筛选
+            user_id: 用户ID（可选，用于筛选特定用户的反馈）
 
         Returns:
             {
@@ -95,63 +108,105 @@ class FeedbackService:
                 "items": List[Dict]
             }
         """
-        items = self.feedback_list.copy()
+        db = self._get_db()
+        try:
+            query = db.query(Feedback)
 
-        # 类型筛选
-        if feedback_type:
-            items = [f for f in items if f.get("feedback_type") == feedback_type]
+            # 用户筛选
+            if user_id:
+                query = query.filter(Feedback.user_id == user_id)
 
-        # 按时间倒序
-        items.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+            # 类型筛选
+            if feedback_type:
+                if feedback_type == "like":
+                    query = query.filter(Feedback.feedback_type == "positive")
+                elif feedback_type == "dislike":
+                    query = query.filter(Feedback.feedback_type == "negative")
+                else:
+                    query = query.filter(Feedback.feedback_type == feedback_type)
 
-        # 分页
-        total = len(items)
-        start = (page - 1) * page_size
-        end = start + page_size
-        items = items[start:end]
+            # 计算总数
+            total = query.count()
 
-        return {
-            "total": total,
-            "page": page,
-            "page_size": page_size,
-            "items": items
-        }
+            # 排序和分页
+            query = query.order_by(desc(Feedback.created_at))
+            query = query.offset((page - 1) * page_size).limit(page_size)
+
+            items = query.all()
+
+            return {
+                "total": total,
+                "page": page,
+                "page_size": page_size,
+                "items": [
+                    {
+                        "id": f.id,
+                        "content": f.content,
+                        "type": f.feedback_type,
+                        "query_id": f.query_id,
+                        "created_at": f.created_at.isoformat() if f.created_at else None
+                    }
+                    for f in items
+                ]
+            }
+        finally:
+            db.close()
 
     def get_feedback_stats(self) -> Dict[str, Any]:
         """获取反馈统计"""
-        total = len(self.feedback_list)
-        like_count = sum(1 for f in self.feedback_list if f.get("feedback_type") == "like")
-        dislike_count = sum(1 for f in self.feedback_list if f.get("feedback_type") == "dislike")
-        comment_count = sum(1 for f in self.feedback_list if f.get("feedback_type") == "comment")
+        db = self._get_db()
+        try:
+            total = db.query(Feedback).count()
+            like_count = db.query(Feedback).filter(Feedback.feedback_type == "positive").count()
+            dislike_count = db.query(Feedback).filter(Feedback.feedback_type == "negative").count()
+            comment_count = db.query(Feedback).filter(Feedback.feedback_type == "suggestion").count()
 
-        return {
-            "total_count": total,
-            "like_count": like_count,
-            "dislike_count": dislike_count,
-            "comment_count": comment_count
-        }
+            return {
+                "total_count": total,
+                "like_count": like_count,
+                "dislike_count": dislike_count,
+                "comment_count": comment_count
+            }
+        finally:
+            db.close()
 
     def get_user_feedback(
         self,
+        user_id: str,
         conversation_id: Optional[str] = None,
         message_id: Optional[str] = None
     ) -> Optional[Dict]:
         """
-        获取特定对话/消息的反馈
+        获取特定用户的反馈
 
         Args:
+            user_id: 用户ID
             conversation_id: 对话ID
             message_id: 消息ID
 
         Returns:
             反馈记录或 None
         """
-        for feedback in self.feedback_list:
-            if conversation_id and feedback.get("conversation_id") == conversation_id:
-                return feedback
-            if message_id and feedback.get("message_id") == message_id:
-                return feedback
-        return None
+        db = self._get_db()
+        try:
+            query = db.query(Feedback).filter(Feedback.user_id == user_id)
+
+            if conversation_id:
+                # 临时使用 query_id 存储 conversation_id
+                query = query.filter(Feedback.query_id == conversation_id)
+
+            feedback = query.first()
+
+            if feedback:
+                return {
+                    "id": feedback.id,
+                    "content": feedback.content,
+                    "type": feedback.feedback_type,
+                    "created_at": feedback.created_at.isoformat() if feedback.created_at else None
+                }
+            return None
+        finally:
+            db.close()
 
 
 # 全局反馈服务实例

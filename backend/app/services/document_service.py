@@ -1,17 +1,23 @@
 """
-Document Service - 文档服务
+Document Service - 文档服务 (MySQL版本)
+重构为使用SQLAlchemy ORM进行MySQL持久化
 """
 import uuid
 import json
 from typing import List, Optional, Dict, Any
 from datetime import datetime
-from pathlib import Path
 
+from sqlalchemy import or_, func
+from sqlalchemy.orm import Session
+
+from app.core.database import get_db_context
+from app.models.document import Document, DocumentChunk, Category
+from app.models.user import User
 from app.services.document_parser import document_parser
 
 
 class DocumentService:
-    """文档服务"""
+    """文档服务 - MySQL版本"""
 
     # 预定义分类
     DEFAULT_CATEGORIES = [
@@ -24,116 +30,12 @@ class DocumentService:
     ]
 
     def __init__(self):
-        self.data_dir = Path(__file__).resolve().parents[2] / "data"
-        self.data_dir.mkdir(exist_ok=True)
-        self.documents_file = self.data_dir / "documents.json"
-        self.documents: Dict[str, Dict] = {}
-        self._load_documents()
+        pass
 
-    def _load_documents(self):
-        """加载文档数据"""
-        if self.documents_file.exists():
-            try:
-                with open(self.documents_file, 'r', encoding='utf-8') as f:
-                    self.documents = json.load(f)
-            except Exception:
-                self.documents = {}
-        else:
-            # 初始化示例数据
-            self._init_sample_data()
-
-    def _init_sample_data(self):
-        """初始化示例文档数据"""
-        sample_docs = [
-            {
-                "id": "doc_001",
-                "name": "产品使用手册 v2.0.pdf",
-                "category": "产品文档",
-                "file_type": "pdf",
-                "file_size": 2457600,
-                "chunk_count": 45,
-                "created_at": datetime.now().isoformat(),
-                "updated_at": datetime.now().isoformat(),
-                "content": "第一章：产品概述\n\n本产品是一款面向企业的知识库管理系统...\n\n第二章：快速入门\n\n2.1 登录系统...",
-                "chunks": [
-                    {"id": "chunk_001", "content": "第一章：产品概述...", "page": 1},
-                    {"id": "chunk_002", "content": "第二章：快速入门...", "page": 3},
-                ]
-            },
-            {
-                "id": "doc_002",
-                "name": "技术架构设计文档.docx",
-                "category": "技术文档",
-                "file_type": "docx",
-                "file_size": 1843200,
-                "chunk_count": 32,
-                "created_at": datetime.now().isoformat(),
-                "updated_at": datetime.now().isoformat(),
-                "content": "技术架构概述...",
-                "chunks": []
-            },
-            {
-                "id": "doc_003",
-                "name": "员工手册 2024 版.pdf",
-                "category": "规章制度",
-                "file_type": "pdf",
-                "file_size": 3174400,
-                "chunk_count": 58,
-                "created_at": datetime.now().isoformat(),
-                "updated_at": datetime.now().isoformat(),
-                "content": "员工手册内容...",
-                "chunks": []
-            },
-            {
-                "id": "doc_004",
-                "name": "培训资料 - 新员工入职.md",
-                "category": "培训资料",
-                "file_type": "md",
-                "file_size": 45000,
-                "chunk_count": 12,
-                "created_at": datetime.now().isoformat(),
-                "updated_at": datetime.now().isoformat(),
-                "content": "新员工入职培训内容...",
-                "chunks": []
-            },
-            {
-                "id": "doc_005",
-                "name": "API 接口文档.pdf",
-                "category": "技术文档",
-                "file_type": "pdf",
-                "file_size": 1200000,
-                "chunk_count": 28,
-                "created_at": datetime.now().isoformat(),
-                "updated_at": datetime.now().isoformat(),
-                "content": "API接口文档内容...",
-                "chunks": []
-            },
-            {
-                "id": "doc_006",
-                "name": "产品路线图 2024.pdf",
-                "category": "产品文档",
-                "file_type": "pdf",
-                "file_size": 3200000,
-                "chunk_count": 15,
-                "created_at": datetime.now().isoformat(),
-                "updated_at": datetime.now().isoformat(),
-                "content": "产品路线图内容...",
-                "chunks": []
-            },
-        ]
-
-        for doc in sample_docs:
-            self.documents[doc["id"]] = doc
-
-        self._save_documents()
-
-    def _save_documents(self):
-        """保存文档数据"""
-        try:
-            with open(self.documents_file, 'w', encoding='utf-8') as f:
-                json.dump(self.documents, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            print(f"Error saving documents: {e}")
+    def _get_db(self) -> Session:
+        """获取数据库会话（同步上下文）"""
+        from backend.app.core.database import SessionLocal
+        return SessionLocal()
 
     def list_documents(
         self,
@@ -141,140 +43,268 @@ class DocumentService:
         page_size: int = 20,
         category: Optional[str] = None,
         keyword: Optional[str] = None,
-        file_type: Optional[str] = None
+        file_type: Optional[str] = None,
+        user_id: Optional[str] = None  # 为数据隔离预留
     ) -> Dict[str, Any]:
         """
         获取文档列表
 
-        Returns:
-            {
-                "total": int,
-                "page": int,
-                "page_size": int,
-                "items": List[Document]
-            }
+        Args:
+            user_id: 当前用户ID，用于数据隔离（可选）
         """
-        items = list(self.documents.values())
+        db = self._get_db()
+        try:
+            query = db.query(Document)
 
-        # 分类筛选
-        if category:
-            items = [d for d in items if d["category"] == category]
+            # 数据隔离：只查询用户有权限看到的文档
+            if user_id:
+                # 用户能看到：公共文档 + 自己的文档 + 同部门的文档
+                user = db.query(User).filter(User.id == user_id).first()
+                if user:
+                    query = query.filter(
+                        or_(
+                            Document.visibility == "public",
+                            Document.owner_id == user_id,
+                            (Document.visibility == "department") & (Document.department == user.department)
+                        )
+                    )
+                else:
+                    query = query.filter(Document.visibility == "public")
+            else:
+                # 未登录用户只能看公共文档
+                query = query.filter(Document.visibility == "public")
 
-        # 类型筛选
-        if file_type:
-            items = [d for d in items if d["file_type"] == file_type]
+            # 分类筛选
+            if category:
+                query = query.filter(Document.category == category)
 
-        # 关键词搜索
-        if keyword:
-            keyword_lower = keyword.lower()
-            items = [
-                d for d in items
-                if keyword_lower in d["name"].lower()
-                or keyword_lower in d.get("content", "").lower()
-            ]
+            # 文件类型筛选
+            if file_type:
+                query = query.filter(Document.file_type == file_type)
 
-        # 按更新时间排序
-        items.sort(key=lambda x: x.get("updated_at", ""), reverse=True)
+            # 关键词搜索（名称或内容）
+            if keyword:
+                keyword_lower = f"%{keyword}%"
+                query = query.filter(
+                    or_(
+                        Document.name.ilike(keyword_lower),
+                        Document.content.ilike(keyword_lower)
+                    )
+                )
 
-        # 分页
-        total = len(items)
-        start = (page - 1) * page_size
-        end = start + page_size
-        items = items[start:end]
+            # 计算总数
+            total = query.count()
 
-        return {
-            "total": total,
-            "page": page,
-            "page_size": page_size,
-            "items": items
-        }
+            # 排序和分页
+            query = query.order_by(Document.updated_at.desc())
+            query = query.offset((page - 1) * page_size).limit(page_size)
 
-    def get_document(self, doc_id: str) -> Optional[Dict]:
+            items = query.all()
+
+            return {
+                "total": total,
+                "page": page,
+                "page_size": page_size,
+                "items": [self._doc_to_dict(doc) for doc in items]
+            }
+        finally:
+            db.close()
+
+    def get_document(self, doc_id: str, user_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """获取文档详情"""
-        return self.documents.get(doc_id)
+        db = self._get_db()
+        try:
+            doc = db.query(Document).filter(Document.id == doc_id).first()
+            if not doc:
+                return None
+
+            # 权限检查
+            if not self._can_access_document(doc, user_id, db):
+                return None
+
+            return self._doc_to_dict(doc, include_content=True)
+        finally:
+            db.close()
+
+    def create_document(self, doc_data: Dict[str, Any], user_id: Optional[str] = None) -> Dict[str, Any]:
+        """创建文档（支持解析内容）"""
+        db = self._get_db()
+        try:
+            doc_id = str(uuid.uuid4())
+            now = datetime.now()
+
+            # 获取文件内容（二进制）
+            raw_content = doc_data.get("raw_content")
+            file_type = doc_data.get("file_type", "unknown")
+            filename = doc_data.get("name", "未命名文档")
+            category = doc_data.get("category", "其他")
+
+            # 创建文档记录
+            document = Document(
+                id=doc_id,
+                name=filename,
+                category=category,
+                file_type=file_type,
+                file_size=doc_data.get("file_size", 0),
+                chunk_count=0,
+                owner_id=user_id,  # 上传者成为所有者
+                visibility=doc_data.get("visibility", "public"),
+                department=doc_data.get("department"),
+                content="",
+                created_at=now,
+                updated_at=now
+            )
+
+            # 如果提供了二进制内容，解析文档
+            if raw_content and isinstance(raw_content, bytes):
+                try:
+                    parse_result = document_parser.parse_document(
+                        content=raw_content,
+                        file_type=file_type,
+                        filename=filename
+                    )
+
+                    document.content = parse_result["text"][:10000]  # 限制存储长度
+                    document.chunk_count = len(parse_result["chunks"])
+
+                    db.add(document)
+                    db.flush()  # 获取文档ID
+
+                    # 创建文档片段
+                    for idx, chunk_data in enumerate(parse_result["chunks"]):
+                        chunk = DocumentChunk(
+                            id=str(uuid.uuid4()),
+                            document_id=doc_id,
+                            content=chunk_data.get("content", "")[:5000],
+                            page=chunk_data.get("page"),
+                            chunk_index=idx,
+                            metadata_json=json.dumps(chunk_data.get("metadata", {})) if chunk_data.get("metadata") else None
+                        )
+                        db.add(chunk)
+
+                except Exception as e:
+                    print(f"Error parsing document {filename}: {e}")
+                    db.add(document)
+            else:
+                db.add(document)
+
+            db.commit()
+            db.refresh(document)
+
+            return self._doc_to_dict(document, include_content=True)
+        finally:
+            db.close()
+
+    def delete_document(self, doc_id: str, user_id: Optional[str] = None) -> bool:
+        """删除文档（只有所有者或管理员可以删除）"""
+        db = self._get_db()
+        try:
+            doc = db.query(Document).filter(Document.id == doc_id).first()
+            if not doc:
+                return False
+
+            # 权限检查：只有所有者可以删除
+            if user_id and doc.owner_id != user_id:
+                # TODO: 检查用户是否是管理员
+                return False
+
+            db.delete(doc)
+            db.commit()
+            return True
+        finally:
+            db.close()
 
     def get_categories(self) -> List[Dict[str, Any]]:
         """获取分类列表及文档数量"""
-        category_counts = {}
-        for doc in self.documents.values():
-            cat = doc.get("category", "其他")
-            category_counts[cat] = category_counts.get(cat, 0) + 1
+        db = self._get_db()
+        try:
+            # 从数据库分类表获取
+            categories = db.query(Category).filter(Category.is_active == "Y").order_by(Category.sort_order).all()
 
-        # 确保所有默认分类都在列表中
-        for cat in self.DEFAULT_CATEGORIES:
-            if cat not in category_counts:
-                category_counts[cat] = 0
+            result = []
+            for cat in categories:
+                # 统计每个分类的文档数量
+                count = db.query(Document).filter(
+                    Document.category == cat.name,
+                    Document.visibility == "public"  # 只统计公共文档
+                ).count()
 
-        return [
-            {"name": name, "count": count}
-            for name, count in sorted(category_counts.items())
-        ]
+                result.append({
+                    "name": cat.name,
+                    "count": count
+                })
 
-    def create_document(self, doc_data: Dict[str, Any]) -> Dict[str, Any]:
-        """创建文档（支持解析内容）"""
-        doc_id = str(uuid.uuid4())
-        now = datetime.now().isoformat()
-
-        # 获取文件内容（二进制）
-        raw_content = doc_data.get("raw_content")
-        file_type = doc_data.get("file_type", "unknown")
-        filename = doc_data.get("name", "未命名文档")
-
-        # 初始化文档数据
-        doc = {
-            "id": doc_id,
-            "name": filename,
-            "category": doc_data.get("category", "其他"),
-            "file_type": file_type,
-            "file_size": doc_data.get("file_size", 0),
-            "chunk_count": 0,
-            "created_at": now,
-            "updated_at": now,
-            "content": doc_data.get("content", ""),
-            "chunks": [],
-            "metadata": {}
-        }
-
-        # 如果提供了二进制内容，解析文档
-        if raw_content and isinstance(raw_content, bytes):
-            try:
-                parse_result = document_parser.parse_document(
-                    content=raw_content,
-                    file_type=file_type,
-                    filename=filename
-                )
-
-                doc["content"] = parse_result["text"][:10000]  # 限制存储长度
-                doc["chunks"] = parse_result["chunks"]
-                doc["chunk_count"] = len(parse_result["chunks"])
-                doc["metadata"] = parse_result["metadata"]
-
-            except Exception as e:
-                print(f"Error parsing document {filename}: {e}")
-                doc["metadata"]["parse_error"] = str(e)
-
-        self.documents[doc_id] = doc
-        self._save_documents()
-        return doc
-
-    def delete_document(self, doc_id: str) -> bool:
-        """删除文档"""
-        if doc_id in self.documents:
-            del self.documents[doc_id]
-            self._save_documents()
-            return True
-        return False
+            return result
+        finally:
+            db.close()
 
     def get_stats(self) -> Dict[str, Any]:
         """获取文档统计"""
-        total_docs = len(self.documents)
-        total_chunks = sum(d.get("chunk_count", 0) for d in self.documents.values())
+        db = self._get_db()
+        try:
+            total_docs = db.query(Document).filter(Document.visibility == "public").count()
+            total_chunks = db.query(func.sum(Document.chunk_count)).filter(
+                Document.visibility == "public"
+            ).scalar() or 0
 
-        return {
-            "document_count": total_docs,
-            "chunk_count": total_chunks,
-            "categories": self.get_categories()
+            return {
+                "document_count": total_docs,
+                "chunk_count": total_chunks,
+                "categories": self.get_categories()
+            }
+        finally:
+            db.close()
+
+    def _doc_to_dict(self, doc: Document, include_content: bool = False) -> Dict[str, Any]:
+        """将文档模型转换为字典"""
+        result = {
+            "id": doc.id,
+            "name": doc.name,
+            "category": doc.category,
+            "file_type": doc.file_type,
+            "file_size": doc.file_size,
+            "chunk_count": doc.chunk_count,
+            "created_at": doc.created_at.isoformat() if doc.created_at else None,
+            "updated_at": doc.updated_at.isoformat() if doc.updated_at else None,
         }
+
+        if include_content:
+            result["content"] = doc.content
+
+            # 加载片段
+            chunks = [
+                {
+                    "id": chunk.id,
+                    "content": chunk.content,
+                    "page": chunk.page,
+                    "metadata": json.loads(chunk.metadata_json) if chunk.metadata_json else {}
+                }
+                for chunk in doc.chunks
+            ]
+            result["chunks"] = sorted(chunks, key=lambda x: x.get("page") or 0)
+
+        return result
+
+    def _can_access_document(self, doc: Document, user_id: Optional[str], db: Session) -> bool:
+        """检查用户是否有权限访问文档"""
+        # 公共文档所有人可访问
+        if doc.visibility == "public":
+            return True
+
+        # 私有文档只有所有者可访问
+        if doc.visibility == "private":
+            return user_id is not None and doc.owner_id == user_id
+
+        # 部门文档需要同部门
+        if doc.visibility == "department":
+            if not user_id:
+                return False
+            user = db.query(User).filter(User.id == user_id).first()
+            if not user:
+                return False
+            return doc.department == user.department
+
+        return False
 
 
 # 全局文档服务实例

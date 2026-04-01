@@ -4,9 +4,9 @@ Feedback API - 反馈接口
 from typing import Optional
 from fastapi import APIRouter, Query
 
-from backend.app.schemas import ApiResponse
-from backend.app.schemas.feedback import FeedbackCreate, FeedbackListResponse, FeedbackStats
-from backend.app.services.feedback_service import feedback_service
+from app.schemas import ApiResponse
+from app.schemas.feedback import FeedbackCreate, FeedbackListResponse, FeedbackStats
+from app.services.feedback_service import feedback_service
 
 router = APIRouter()
 

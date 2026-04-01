@@ -5,9 +5,9 @@ from typing import Optional
 from fastapi import APIRouter, Query
 from fastapi.responses import StreamingResponse
 
-from backend.app.schemas import ApiResponse, ChatRequest, ChatResponse
-from backend.app.schemas.chat import ChatHistoryResponse
-from backend.app.services import chat_service, stats_service
+from app.schemas import ApiResponse, ChatRequest, ChatResponse
+from app.schemas.chat import ChatHistoryResponse
+from app.services import chat_service, stats_service
 
 router = APIRouter()
 
@@ -83,21 +83,31 @@ async def get_chat_history(conversation_id: Optional[str] = Query(None)):
             message="success"
         )
     else:
-        # 返回所有对话列表
-        conversations = []
-        for conv_id, conv in chat_service.conversations.items():
-            conversations.append({
-                "id": conv_id,
-                "created_at": conv.get("created_at"),
-                "updated_at": conv.get("updated_at"),
-                "message_count": len(conv.get("messages", []))
-            })
+        # 从数据库获取所有对话列表
+        from sqlalchemy import desc
+        from app.core.database import SessionLocal
+        from app.models.chat import Conversation
 
-        # 按更新时间排序
-        conversations.sort(key=lambda x: x.get("updated_at", ""), reverse=True)
+        db = SessionLocal()
+        try:
+            conversations_db = db.query(Conversation).filter(
+                Conversation.is_active == "Y"
+            ).order_by(desc(Conversation.updated_at)).all()
 
-        return ApiResponse(
-            code=200,
-            data={"conversations": conversations},
-            message="success"
-        )
+            conversations = []
+            for conv in conversations_db:
+                conversations.append({
+                    "id": conv.id,
+                    "title": conv.title,
+                    "created_at": conv.created_at.isoformat() if conv.created_at else None,
+                    "updated_at": conv.updated_at.isoformat() if conv.updated_at else None,
+                    "message_count": conv.message_count
+                })
+
+            return ApiResponse(
+                code=200,
+                data={"conversations": conversations},
+                message="success"
+            )
+        finally:
+            db.close()

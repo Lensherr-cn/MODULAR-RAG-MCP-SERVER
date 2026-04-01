@@ -4,8 +4,8 @@ User API - 用户接口
 from typing import Optional
 from fastapi import APIRouter, Query
 
-from backend.app.schemas import ApiResponse, FeedbackRequest
-from backend.app.services import user_service
+from app.schemas import ApiResponse, FeedbackRequest
+from app.services import user_service
 
 router = APIRouter()
 

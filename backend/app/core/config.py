@@ -43,6 +43,18 @@ class Settings:
     SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-here-change-in-production")
     ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7天
 
+    # MySQL数据库配置
+    DB_HOST = os.getenv("DB_HOST", "localhost")
+    DB_PORT = int(os.getenv("DB_PORT", "3306"))
+    DB_USER = os.getenv("DB_USER", "root")
+    DB_PASSWORD = os.getenv("DB_PASSWORD", "12345678")
+    DB_NAME = os.getenv("DB_NAME", "knowledge_hub")
+
+    @property
+    def DATABASE_URL(self) -> str:
+        """构建数据库连接URL"""
+        return f"mysql+pymysql://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
+
 
 # 全局配置实例
 settings = Settings()
