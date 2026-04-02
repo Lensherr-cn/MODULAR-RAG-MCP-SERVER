@@ -1,12 +1,15 @@
 """
 Documents API - 文档接口
+已接入用户认证和数据隔离
 """
 from typing import Optional
-from fastapi import APIRouter, Query, UploadFile, File
+from fastapi import APIRouter, Query, UploadFile, File, Depends, HTTPException, status
 
 from app.schemas import ApiResponse
 from app.schemas.document import DocumentListResponse, CategoryListResponse
 from app.services.document_service import document_service
+from app.core.auth import get_current_user, require_admin
+from app.models.user import User
 
 router = APIRouter()
 
@@ -17,17 +20,22 @@ async def list_documents(
     page_size: int = Query(20, ge=1, le=100),
     category: Optional[str] = Query(None),
     keyword: Optional[str] = Query(None),
-    file_type: Optional[str] = Query(None, description="文件类型筛选，如 pdf, docx, md")
+    file_type: Optional[str] = Query(None, description="文件类型筛选，如 pdf, docx, md"),
+    current_user: User = Depends(get_current_user)
 ):
     """
     获取文档列表（支持分页、分类筛选、关键词搜索、文件类型筛选）
+
+    - 用户只能看到自己有权限的文档
+    - 管理员可以看到所有文档
     """
     result = document_service.list_documents(
         page=page,
         page_size=page_size,
         category=category,
         keyword=keyword,
-        file_type=file_type
+        file_type=file_type,
+        user_id=current_user.id
     )
 
     return ApiResponse(
@@ -38,11 +46,16 @@ async def list_documents(
 
 
 @router.get("/{doc_id}", response_model=ApiResponse)
-async def get_document(doc_id: str):
+async def get_document(
+    doc_id: str,
+    current_user: User = Depends(get_current_user)
+):
     """
     获取文档详情
+
+    - 检查用户是否有权限访问该文档
     """
-    doc = document_service.get_document(doc_id)
+    doc = document_service.get_document(doc_id, user_id=current_user.id)
     if doc:
         return ApiResponse(
             code=200,
@@ -50,26 +63,46 @@ async def get_document(doc_id: str):
             message="success"
         )
     else:
-        return ApiResponse(
-            code=404,
-            data=None,
-            message="Document not found"
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found or no permission"
         )
 
 
 @router.post("/upload", response_model=ApiResponse)
 async def upload_document(
     file: UploadFile = File(...),
-    category: Optional[str] = Query(None, description="文档分类")
+    category: Optional[str] = Query(None, description="文档分类"),
+    visibility: Optional[str] = Query("public", description="可见性: public/department/private"),
+    current_user: User = Depends(get_current_user)
 ):
     """
     上传文档
 
     支持格式：PDF、Word(docx)、Markdown、TXT
     文档内容会被自动解析和分块
+
+    - 上传的文档归属当前用户
+    - 可设置可见性级别
     """
+    # 验证可见性参数
+    if visibility not in ["public", "department", "private"]:
+        return ApiResponse(
+            code=400,
+            data=None,
+            message="Invalid visibility. Must be: public, department, or private"
+        )
+
     # 读取文件二进制内容
     content = await file.read()
+
+    # 检查文件内容是否为空
+    if not content:
+        return ApiResponse(
+            code=400,
+            data=None,
+            message="File content is empty"
+        )
 
     # 确定文件类型
     file_type = file.filename.split(".")[-1].lower() if "." in file.filename else "unknown"
@@ -89,10 +122,12 @@ async def upload_document(
         "file_type": file_type,
         "file_size": len(content),
         "category": category,
+        "visibility": visibility,
+        "department": current_user.department if visibility == "department" else None,
         "raw_content": content  # 传递二进制内容给解析器
     }
 
-    doc = document_service.create_document(doc_data)
+    doc = document_service.create_document(doc_data, user_id=current_user.id)
 
     return ApiResponse(
         code=200,
@@ -103,6 +138,7 @@ async def upload_document(
             "file_type": doc["file_type"],
             "file_size": doc["file_size"],
             "chunk_count": doc["chunk_count"],
+            "visibility": visibility,
             "created_at": doc["created_at"],
             "metadata": doc.get("metadata", {}),
             "preview": doc["content"][:500] if doc["content"] else ""
@@ -112,11 +148,16 @@ async def upload_document(
 
 
 @router.delete("/{doc_id}", response_model=ApiResponse)
-async def delete_document(doc_id: str):
+async def delete_document(
+    doc_id: str,
+    current_user: User = Depends(get_current_user)
+):
     """
     删除文档
+
+    - 只有文档所有者或管理员可以删除
     """
-    success = document_service.delete_document(doc_id)
+    success = document_service.delete_document(doc_id, user_id=current_user.id)
     if success:
         return ApiResponse(
             code=200,
@@ -124,15 +165,16 @@ async def delete_document(doc_id: str):
             message="Document deleted successfully"
         )
     else:
-        return ApiResponse(
-            code=404,
-            data=None,
-            message="Document not found"
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found or no permission to delete"
         )
 
 
 @router.get("/categories/all", response_model=ApiResponse)
-async def get_categories():
+async def get_categories(
+    current_user: User = Depends(get_current_user)
+):
     """
     获取文档分类列表
     """

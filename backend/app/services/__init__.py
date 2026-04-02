@@ -1,9 +1,9 @@
-from backend.app.services.rag_service import rag_service
-from backend.app.services.chat_service import chat_service
-from backend.app.services.document_service import document_service, DocumentService
-from backend.app.services.user_service import user_service, UserService
-from backend.app.services.stats_service import stats_service, StatsService
-from backend.app.services.feedback_service import feedback_service, FeedbackService
+from app.services.rag_service import rag_service
+from app.services.chat_service import chat_service
+from app.services.document_service import document_service, DocumentService
+from app.services.user_service import user_service, UserService
+from app.services.stats_service import stats_service, StatsService
+from app.services.feedback_service import feedback_service, FeedbackService
 
 __all__ = [
     "rag_service",

@@ -1,11 +1,16 @@
 <script setup lang="ts">
+import { computed } from 'vue'
+import { useRoute } from 'vue-router'
 import AppHeader from './components/common/AppHeader.vue'
+
+const route = useRoute()
+const showHeader = computed(() => !route.meta.public)
 </script>
 
 <template>
   <div class="apple-app">
-    <AppHeader />
-    <main class="apple-main">
+    <AppHeader v-if="showHeader" />
+    <main class="apple-main" :class="{ 'no-header': !showHeader }">
       <router-view v-slot="{ Component }">
         <transition name="apple-page" mode="out-in">
           <component :is="Component" />
@@ -26,6 +31,10 @@ import AppHeader from './components/common/AppHeader.vue'
 .apple-main {
   flex: 1;
   padding-top: 52px; /* Header height */
+}
+
+.apple-main.no-header {
+  padding-top: 0;
 }
 
 /* Page Transition Animation */

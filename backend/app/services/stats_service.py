@@ -31,7 +31,7 @@ class StatsService:
 
     def _get_db(self):
         """获取数据库会话"""
-        from backend.app.core.database import SessionLocal
+        from app.core.database import SessionLocal
         return SessionLocal()
 
     def record_query(self, user_id: str, query: str, conversation_id: str = None):

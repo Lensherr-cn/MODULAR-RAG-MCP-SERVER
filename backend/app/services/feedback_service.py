@@ -208,6 +208,59 @@ class FeedbackService:
         finally:
             db.close()
 
+    def get_user_feedback_list(
+        self,
+        user_id: str,
+        page: int = 1,
+        page_size: int = 20
+    ) -> Dict[str, Any]:
+        """
+        获取用户的反馈列表
+
+        Args:
+            user_id: 用户ID
+            page: 页码
+            page_size: 每页数量
+
+        Returns:
+            {
+                "total": int,
+                "page": int,
+                "page_size": int,
+                "items": List[Dict]
+            }
+        """
+        db = self._get_db()
+        try:
+            query = db.query(Feedback).filter(Feedback.user_id == user_id)
+
+            # 计算总数
+            total = query.count()
+
+            # 排序和分页
+            query = query.order_by(desc(Feedback.created_at))
+            query = query.offset((page - 1) * page_size).limit(page_size)
+
+            items = query.all()
+
+            return {
+                "total": total,
+                "page": page,
+                "page_size": page_size,
+                "items": [
+                    {
+                        "id": f.id,
+                        "content": f.content,
+                        "type": f.feedback_type,
+                        "query_id": f.query_id,
+                        "created_at": f.created_at.isoformat() if f.created_at else None
+                    }
+                    for f in items
+                ]
+            }
+        finally:
+            db.close()
+
 
 # 全局反馈服务实例
 feedback_service = FeedbackService()

@@ -3,7 +3,19 @@ Database Models
 数据库模型模块
 """
 
-# 注意：不要在这里导入具体模型，避免循环导入
-# 使用处直接导入具体模型文件
+# 导入所有模型以确保 SQLAlchemy 正确建立关系
+from app.models.user import User, QueryHistory, Favorite, Feedback
+from app.models.document import Document, DocumentChunk, Category
+from app.models.chat import Conversation, ChatMessage
 
-__all__ = []
+__all__ = [
+    "User",
+    "QueryHistory",
+    "Favorite",
+    "Feedback",
+    "Document",
+    "DocumentChunk",
+    "Category",
+    "Conversation",
+    "ChatMessage",
+]

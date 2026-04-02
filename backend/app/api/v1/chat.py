@@ -1,21 +1,30 @@
 """
 Chat API - 问答接口
+已接入用户认证和数据隔离
 """
 from typing import Optional
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Depends
 from fastapi.responses import StreamingResponse
 
 from app.schemas import ApiResponse, ChatRequest, ChatResponse
 from app.schemas.chat import ChatHistoryResponse
 from app.services import chat_service, stats_service
+from app.core.auth import get_current_user
+from app.core.data_isolation import filter_conversations_by_user
+from app.models.user import User
 
 router = APIRouter()
 
 
 @router.post("", response_model=ApiResponse)
-async def chat(request: ChatRequest):
+async def chat(
+    request: ChatRequest,
+    current_user: User = Depends(get_current_user)
+):
     """
     智能问答（非流式）
+
+    - 记录查询历史关联当前用户
     """
     # 记录查询统计
     stats_service.record_query()
@@ -24,7 +33,8 @@ async def chat(request: ChatRequest):
     result = await chat_service.chat(
         query=request.query,
         conversation_id=request.conversation_id,
-        collection=request.collection or "default"
+        collection=request.collection or "default",
+        user_id=current_user.id
     )
 
     return ApiResponse(
@@ -38,7 +48,8 @@ async def chat(request: ChatRequest):
 async def chat_stream(
     query: str,
     conversation_id: Optional[str] = Query(None),
-    collection: str = Query("default")
+    collection: str = Query("default"),
+    current_user: User = Depends(get_current_user)
 ):
     """
     流式问答（SSE）
@@ -52,7 +63,8 @@ async def chat_stream(
         async for line in chat_service.chat_stream(
             query=query,
             conversation_id=conversation_id,
-            collection=collection
+            collection=collection,
+            user_id=current_user.id
         ):
             yield line
 
@@ -68,11 +80,35 @@ async def chat_stream(
 
 
 @router.get("/history", response_model=ApiResponse)
-async def get_chat_history(conversation_id: Optional[str] = Query(None)):
+async def get_chat_history(
+    conversation_id: Optional[str] = Query(None),
+    current_user: User = Depends(get_current_user)
+):
     """
     获取对话历史
+
+    - 用户只能看到自己的对话
     """
     if conversation_id:
+        # 验证对话属于当前用户
+        from app.core.database import SessionLocal
+        from app.models.chat import Conversation
+
+        db = SessionLocal()
+        try:
+            conv = db.query(Conversation).filter(
+                Conversation.id == conversation_id
+            ).first()
+
+            if not conv or conv.user_id != current_user.id:
+                return ApiResponse(
+                    code=404,
+                    data=None,
+                    message="Conversation not found"
+                )
+        finally:
+            db.close()
+
         messages = chat_service.get_conversation_history(conversation_id)
         return ApiResponse(
             code=200,
@@ -83,16 +119,20 @@ async def get_chat_history(conversation_id: Optional[str] = Query(None)):
             message="success"
         )
     else:
-        # 从数据库获取所有对话列表
+        # 从数据库获取当前用户的所有对话列表
         from sqlalchemy import desc
         from app.core.database import SessionLocal
         from app.models.chat import Conversation
 
         db = SessionLocal()
         try:
-            conversations_db = db.query(Conversation).filter(
+            query = db.query(Conversation).filter(
                 Conversation.is_active == "Y"
-            ).order_by(desc(Conversation.updated_at)).all()
+            )
+            # 数据隔离：只查询当前用户的对话
+            query = filter_conversations_by_user(query, current_user)
+
+            conversations_db = query.order_by(desc(Conversation.updated_at)).all()
 
             conversations = []
             for conv in conversations_db:

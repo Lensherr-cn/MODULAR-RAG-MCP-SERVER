@@ -12,6 +12,7 @@ export interface ApiResponse<T = any> {
 const request: AxiosInstance = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
   timeout: 30000,
+  withCredentials: true, // 关键：允许跨域携带 httpOnly Cookie
   headers: {
     'Content-Type': 'application/json',
   },
@@ -20,11 +21,8 @@ const request: AxiosInstance = axios.create({
 // 请求拦截器
 request.interceptors.request.use(
   (config) => {
-    // 从 localStorage 获取 token
-    const token = localStorage.getItem('token')
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
+    // Token 通过 httpOnly Cookie 自动携带，不需要手动设置
+    // 保留此拦截器用于未来扩展（如添加 CSRF Token）
     return config
   },
   (error) => {
@@ -43,8 +41,7 @@ request.interceptors.response.use(
       switch (error.response.status) {
         case 401:
           console.error('Unauthorized, please login again')
-          localStorage.removeItem('token')
-          window.location.href = '/login'
+          // 让路由守卫处理重定向，不在拦截器中跳转
           break
         case 403:
           console.error('Forbidden')

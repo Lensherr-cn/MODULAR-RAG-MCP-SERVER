@@ -21,6 +21,7 @@ class User(Base):
     department = Column(String(100), nullable=True, comment="部门")
     avatar = Column(String(500), nullable=True, comment="头像URL")
     password_hash = Column(String(255), nullable=True, comment="密码哈希（预留）")
+    role = Column(String(20), default="user", comment="角色：admin/user/guest")
     is_active = Column(String(1), default="Y", comment="是否启用：Y/N")
     created_at = Column(DateTime, default=func.now(), comment="创建时间")
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), comment="更新时间")

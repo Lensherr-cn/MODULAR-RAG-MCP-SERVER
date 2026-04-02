@@ -2,7 +2,7 @@
   <header class="apple-header" :class="{ 'scrolled': isScrolled }">
     <div class="header-content">
       <!-- Logo -->
-      <div class="header-brand" @click="router.push('/')">
+      <div class="header-brand" @click="goToHome">
         <div class="brand-icon">
           <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M12 2L2 7L12 12L22 7L12 2Z" fill="currentColor"/>
@@ -13,8 +13,8 @@
         <span class="brand-text">Knowledge</span>
       </div>
 
-      <!-- Navigation -->
-      <nav class="header-nav">
+      <!-- Navigation (only show when logged in) -->
+      <nav v-if="userStore.isLoggedIn" class="header-nav">
         <router-link
           v-for="item in navItems"
           :key="item.path"
@@ -66,7 +66,7 @@
           </el-dropdown>
         </template>
         <template v-else>
-          <button class="auth-button" @click="handleLogin">
+          <button v-if="route.path !== '/login'" class="auth-button" @click="handleLogin">
             登录
           </button>
         </template>
@@ -96,10 +96,18 @@ const userStore = useUserStore()
 const isScrolled = ref(false)
 
 const navItems = [
-  { path: '/', label: '首页', icon: HomeFilled },
+  { path: '/home', label: '首页', icon: HomeFilled },
   { path: '/chat', label: '问答', icon: ChatDotRound },
   { path: '/documents', label: '文档', icon: Document },
 ]
+
+const goToHome = () => {
+  if (userStore.isLoggedIn) {
+    router.push('/home')
+  } else {
+    router.push('/')
+  }
+}
 
 const handleScroll = () => {
   isScrolled.value = window.scrollY > 10
@@ -125,8 +133,7 @@ const handleLogout = () => {
 }
 
 const handleLogin = () => {
-  // 这里可以实现登录逻辑
-  ElMessage.info('登录功能开发中')
+  router.push('/login')
 }
 </script>
 

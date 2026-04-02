@@ -40,8 +40,10 @@ class Settings:
     DATA_DIR.mkdir(exist_ok=True)
 
     # JWT配置（简化实现，实际应使用更安全的配置）
-    SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-here-change-in-production")
-    ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7天
+    SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-here-change-in-production-minimum-32-characters")
+    JWT_ALGORITHM = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES = 15  # Access Token 15分钟
+    REFRESH_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # Refresh Token 7天
 
     # MySQL数据库配置
     DB_HOST = os.getenv("DB_HOST", "localhost")

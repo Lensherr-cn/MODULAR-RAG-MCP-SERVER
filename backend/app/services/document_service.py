@@ -34,7 +34,7 @@ class DocumentService:
 
     def _get_db(self) -> Session:
         """获取数据库会话（同步上下文）"""
-        from backend.app.core.database import SessionLocal
+        from app.core.database import SessionLocal
         return SessionLocal()
 
     def list_documents(
