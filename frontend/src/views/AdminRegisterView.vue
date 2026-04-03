@@ -1,5 +1,5 @@
 <template>
-  <div class="login-container">
+  <div class="register-container">
     <AuthBackground />
 
     <!-- 导航栏 -->
@@ -17,19 +17,19 @@
 
     <!-- 主内容区 -->
     <main class="main-content">
-      <div class="login-card" :class="{ 'shake': shakeCard }">
+      <div class="register-card" :class="{ 'shake': shakeCard }">
         <!-- 卡片玻璃效果 -->
         <div class="glass-layer"></div>
 
         <div class="card-content">
           <!-- 标题 -->
           <div class="header">
-            <h1 class="title">登录</h1>
-            <p class="subtitle">输入您的凭据以访问账户</p>
+            <h1 class="title">特权账户注册</h1>
+            <p class="subtitle">管理员与领导账户注册</p>
           </div>
 
-          <!-- 登录表单 -->
-          <form class="login-form" @submit.prevent="handleLogin">
+          <!-- 注册表单 -->
+          <form class="register-form" @submit.prevent="handleRegister" v-if="!isSuccess">
             <!-- 用户名输入 -->
             <div class="input-wrapper">
               <div class="input-field" :class="{ 'focused': usernameFocused, 'filled': username }">
@@ -48,6 +48,83 @@
               </div>
             </div>
 
+            <!-- 邮箱输入 -->
+            <div class="input-wrapper">
+              <div class="input-field" :class="{ 'focused': emailFocused, 'filled': email }">
+                <label class="input-label">邮箱</label>
+                <input
+                  v-model="email"
+                  type="email"
+                  required
+                  autocomplete="email"
+                  @focus="emailFocused = true"
+                  @blur="emailFocused = false"
+                />
+                <div class="input-underline">
+                  <div class="underline-fill"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 部门输入 -->
+            <div class="input-wrapper">
+              <div class="input-field" :class="{ 'focused': departmentFocused, 'filled': department }">
+                <label class="input-label">部门</label>
+                <input
+                  v-model="department"
+                  type="text"
+                  required
+                  autocomplete="organization"
+                  @focus="departmentFocused = true"
+                  @blur="departmentFocused = false"
+                />
+                <div class="input-underline">
+                  <div class="underline-fill"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 角色选择 -->
+            <div class="role-selector">
+              <span class="role-label">注册类型</span>
+              <div class="role-segmented">
+                <button
+                  type="button"
+                  class="role-option"
+                  :class="{ active: role === 'admin' }"
+                  @click="role = 'admin'"
+                >
+                  管理员
+                </button>
+                <button
+                  type="button"
+                  class="role-option"
+                  :class="{ active: role === 'leader' }"
+                  @click="role = 'leader'"
+                >
+                  领导
+                </button>
+              </div>
+            </div>
+
+            <!-- 权限标识字段 -->
+            <div class="input-wrapper">
+              <div class="input-field" :class="{ 'focused': permissionCodeFocused, 'filled': permissionCode }">
+                <label class="input-label">权限标识码</label>
+                <input
+                  v-model="permissionCode"
+                  type="text"
+                  required
+                  autocomplete="off"
+                  @focus="permissionCodeFocused = true"
+                  @blur="permissionCodeFocused = false"
+                />
+                <div class="input-underline">
+                  <div class="underline-fill"></div>
+                </div>
+              </div>
+            </div>
+
             <!-- 密码输入 -->
             <div class="input-wrapper">
               <div class="input-field" :class="{ 'focused': passwordFocused, 'filled': password }">
@@ -56,7 +133,7 @@
                   v-model="password"
                   :type="showPassword ? 'text' : 'password'"
                   required
-                  autocomplete="current-password"
+                  autocomplete="new-password"
                   @focus="passwordFocused = true"
                   @blur="passwordFocused = false"
                 />
@@ -80,23 +157,41 @@
               </div>
             </div>
 
-            <!-- 记住我 -->
-            <div class="options">
-              <label class="checkbox-wrapper">
-                <input type="checkbox" v-model="rememberMe" />
-                <span class="checkbox">
-                  <svg viewBox="0 0 12 12" fill="none">
-                    <path d="M2 6l3 3 5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <!-- 确认密码输入 -->
+            <div class="input-wrapper">
+              <div class="input-field" :class="{ 'focused': confirmPasswordFocused, 'filled': confirmPassword }">
+                <label class="input-label">确认密码</label>
+                <input
+                  v-model="confirmPassword"
+                  :type="showConfirmPassword ? 'text' : 'password'"
+                  required
+                  autocomplete="new-password"
+                  @focus="confirmPasswordFocused = true"
+                  @blur="confirmPasswordFocused = false"
+                />
+                <button
+                  type="button"
+                  class="toggle-password"
+                  @click="showConfirmPassword = !showConfirmPassword"
+                >
+                  <svg v-if="showConfirmPassword" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                    <circle cx="12" cy="12" r="3"/>
                   </svg>
-                </span>
-                <span class="checkbox-label">记住我</span>
-              </label>
-              <a href="#" class="forgot-link">忘记密码？</a>
+                  <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                    <line x1="1" y1="1" x2="23" y2="23"/>
+                  </svg>
+                </button>
+                <div class="input-underline">
+                  <div class="underline-fill"></div>
+                </div>
+              </div>
             </div>
 
-            <!-- 登录按钮 -->
-            <button type="submit" class="signin-button" :disabled="isLoading">
-              <span class="button-text" :class="{ 'hidden': isLoading }">登录</span>
+            <!-- 注册按钮 -->
+            <button type="submit" class="submit-button" :disabled="isLoading">
+              <span class="button-text" :class="{ 'hidden': isLoading }">创建账户</span>
               <span class="button-loader" :class="{ 'visible': isLoading }">
                 <svg viewBox="0 0 44 44">
                   <circle cx="22" cy="22" r="20" fill="none" stroke="currentColor" stroke-width="4"/>
@@ -105,9 +200,21 @@
             </button>
           </form>
 
+          <!-- 成功提示 -->
+          <div v-else class="success-state">
+            <div class="success-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                <polyline points="22 4 12 14.01 9 11.01"/>
+              </svg>
+            </div>
+            <h2 class="success-title">注册成功</h2>
+            <p class="success-message">特权账户已创建，正在跳转到登录页...</p>
+          </div>
+
           <!-- 错误提示 -->
           <Transition name="slide-fade">
-            <div v-if="errorMessage" class="error-banner">
+            <div v-if="errorMessage && !isSuccess" class="error-banner">
               <svg class="error-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <circle cx="12" cy="12" r="10"/>
                 <line x1="12" y1="8" x2="12" y2="12"/>
@@ -121,9 +228,9 @@
 
       <!-- 底部链接 -->
       <div class="footer">
-        <p>还没有账户？<router-link to="/register" class="signup-link">立即注册</router-link></p>
-        <p class="admin-register-line">
-          <router-link to="/admin-register" class="admin-link">管理员/领导注册</router-link>
+        <p>已有账户？<router-link to="/login" class="login-link">立即登录</router-link></p>
+        <p class="normal-register-line">
+          <router-link to="/register" class="normal-link">普通用户注册</router-link>
         </p>
       </div>
     </main>
@@ -133,24 +240,46 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { useUserStore } from '@/stores/user'
+import { authApi } from '@/api/auth'
 import AuthBackground from '@/components/auth/AuthBackground.vue'
 
 const router = useRouter()
-const userStore = useUserStore()
 
 const username = ref('')
+const email = ref('')
+const department = ref('')
+const role = ref<'admin' | 'leader'>('admin')
+const permissionCode = ref('')
 const password = ref('')
-const rememberMe = ref(false)
+const confirmPassword = ref('')
 const showPassword = ref(false)
+const showConfirmPassword = ref(false)
 const usernameFocused = ref(false)
+const emailFocused = ref(false)
+const departmentFocused = ref(false)
+const permissionCodeFocused = ref(false)
 const passwordFocused = ref(false)
+const confirmPasswordFocused = ref(false)
 const isLoading = ref(false)
 const errorMessage = ref('')
 const shakeCard = ref(false)
+const isSuccess = ref(false)
 
-const handleLogin = async () => {
-  if (!username.value || !password.value) {
+const handleRegister = async () => {
+  if (!username.value || !email.value || !department.value || !permissionCode.value || !password.value || !confirmPassword.value) {
+    errorMessage.value = '请填写所有字段'
+    triggerShake()
+    return
+  }
+
+  if (password.value !== confirmPassword.value) {
+    errorMessage.value = '两次输入的密码不一致'
+    triggerShake()
+    return
+  }
+
+  if (password.value.length < 6) {
+    errorMessage.value = '密码长度至少为6位'
     triggerShake()
     return
   }
@@ -159,20 +288,26 @@ const handleLogin = async () => {
   errorMessage.value = ''
 
   try {
-    const result = await userStore.login({
-      username: username.value,
+    const response = await authApi.register({
+      username: username.value.trim(),
+      email: email.value.trim(),
+      department: department.value.trim(),
       password: password.value,
-      rememberMe: rememberMe.value
+      role: role.value,
+      permissionCode: permissionCode.value.trim()
     })
 
-    if (result.success) {
-      await router.replace('/')
+    if (response.data.code === 200) {
+      isSuccess.value = true
+      setTimeout(() => {
+        router.push('/login')
+      }, 2000)
     } else {
-      errorMessage.value = result.message || 'Authentication failed'
+      errorMessage.value = response.data.message || '注册失败'
       triggerShake()
     }
   } catch (error: any) {
-    errorMessage.value = error.message || '网络错误，请重试'
+    errorMessage.value = error.response?.data?.message || '网络错误，请重试'
     triggerShake()
   } finally {
     isLoading.value = false
@@ -196,6 +331,8 @@ const triggerShake = () => {
   --apple-light-gray: #F5F5F7;
   --apple-dark: #1D1D1F;
   --apple-red: #FF3B30;
+  --apple-green: #34C759;
+  --apple-orange: #FF9500;
   --glass-bg: rgba(255, 255, 255, 0.72);
   --glass-border: rgba(255, 255, 255, 0.5);
   --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.04);
@@ -204,7 +341,7 @@ const triggerShake = () => {
 }
 
 /* ===== Container ===== */
-.login-container {
+.register-container {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -263,11 +400,11 @@ const triggerShake = () => {
   z-index: 10;
 }
 
-/* ===== Login Card (Glassmorphism) ===== */
-.login-card {
+/* ===== Register Card (Glassmorphism) ===== */
+.register-card {
   position: relative;
   width: 100%;
-  max-width: 380px;
+  max-width: 440px;
   background: var(--glass-bg);
   backdrop-filter: saturate(180%) blur(20px);
   -webkit-backdrop-filter: saturate(180%) blur(20px);
@@ -291,7 +428,7 @@ const triggerShake = () => {
   }
 }
 
-.login-card.shake {
+.register-card.shake {
   animation: shake 0.5s cubic-bezier(0.36, 0, 0.66, -0.56);
 }
 
@@ -316,13 +453,13 @@ const triggerShake = () => {
 
 .card-content {
   position: relative;
-  padding: 48px 40px;
+  padding: 44px 40px;
 }
 
 /* ===== Header ===== */
 .header {
   text-align: center;
-  margin-bottom: 40px;
+  margin-bottom: 28px;
 }
 
 .title {
@@ -341,10 +478,10 @@ const triggerShake = () => {
 }
 
 /* ===== Form ===== */
-.login-form {
+.register-form {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 16px;
 }
 
 .input-wrapper {
@@ -379,8 +516,8 @@ const triggerShake = () => {
 
 .input-field input {
   width: 100%;
-  height: 48px;
-  padding: 12px 0;
+  height: 46px;
+  padding: 10px 0;
   background: transparent;
   border: none;
   font-size: 16px;
@@ -427,78 +564,57 @@ const triggerShake = () => {
   color: var(--apple-dark);
 }
 
-/* ===== Options ===== */
-.options {
+/* ===== Role Selector ===== */
+.role-selector {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: 8px;
-}
-
-.checkbox-wrapper {
-  display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 10px;
-  cursor: pointer;
+  margin-top: 4px;
 }
 
-.checkbox-wrapper input {
-  display: none;
+.role-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--apple-gray);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
 }
 
-.checkbox {
-  width: 18px;
-  height: 18px;
-  border-radius: 5px;
-  border: 1.5px solid rgba(0, 0, 0, 0.2);
+.role-segmented {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s;
+  gap: 8px;
+  padding: 4px;
+  background: rgba(0, 0, 0, 0.04);
+  border-radius: 10px;
 }
 
-.checkbox svg {
-  width: 10px;
-  height: 10px;
-  color: white;
-  opacity: 0;
-  transform: scale(0.5);
-  transition: all 0.2s;
-}
-
-.checkbox-wrapper input:checked + .checkbox {
-  background: var(--apple-blue);
-  border-color: var(--apple-blue);
-}
-
-.checkbox-wrapper input:checked + .checkbox svg {
-  opacity: 1;
-  transform: scale(1);
-}
-
-.checkbox-label {
+.role-option {
+  flex: 1;
+  height: 36px;
+  border: none;
+  border-radius: 8px;
   font-size: 14px;
-  font-weight: 400;
+  font-weight: 500;
   color: var(--apple-dark);
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.2s;
 }
 
-.forgot-link {
-  font-size: 14px;
-  font-weight: 400;
-  color: var(--apple-blue);
-  text-decoration: none;
-  transition: opacity 0.2s;
+.role-option.active {
+  background: white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
-.forgot-link:hover {
-  opacity: 0.8;
+.role-option:hover:not(.active) {
+  background: rgba(255, 255, 255, 0.4);
 }
 
-/* ===== Sign In Button ===== */
-.signin-button {
+/* ===== Submit Button ===== */
+.submit-button {
   position: relative;
   height: 52px;
-  margin-top: 16px;
+  margin-top: 8px;
   background: var(--apple-dark);
   border: none;
   border-radius: 12px;
@@ -511,17 +627,17 @@ const triggerShake = () => {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
 }
 
-.signin-button:hover:not(:disabled) {
+.submit-button:hover:not(:disabled) {
   background: #000;
   transform: translateY(-1px);
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
 }
 
-.signin-button:active:not(:disabled) {
+.submit-button:active:not(:disabled) {
   transform: translateY(0);
 }
 
-.signin-button:disabled {
+.submit-button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
@@ -562,6 +678,57 @@ const triggerShake = () => {
 
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+/* ===== Success State ===== */
+.success-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 24px 0;
+  animation: scaleIn 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.success-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: rgba(52, 199, 89, 0.12);
+  color: var(--apple-green);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.success-icon svg {
+  width: 32px;
+  height: 32px;
+}
+
+.success-title {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--apple-dark);
+  margin-bottom: 8px;
+}
+
+.success-message {
+  font-size: 15px;
+  color: var(--apple-gray);
+  line-height: 1.4;
 }
 
 /* ===== Error Banner ===== */
@@ -608,29 +775,20 @@ const triggerShake = () => {
   color: var(--apple-gray);
 }
 
-.signup-link {
-  color: var(--apple-blue);
-  text-decoration: none;
-  font-weight: 500;
-  transition: opacity 0.2s;
-}
-
-.signup-link:hover {
-  opacity: 0.8;
-}
-
-.admin-register-line {
+.normal-register-line {
   margin-top: 8px;
 }
 
-.admin-link {
+.login-link,
+.normal-link {
   color: var(--apple-blue);
   text-decoration: none;
   font-weight: 500;
   transition: opacity 0.2s;
 }
 
-.admin-link:hover {
+.login-link:hover,
+.normal-link:hover {
   opacity: 0.8;
 }
 
@@ -645,29 +803,36 @@ const triggerShake = () => {
   }
 
   .card-content {
-    padding: 36px 28px;
+    padding: 32px 24px;
   }
 
   .title {
     font-size: 24px;
   }
+
+  .role-option {
+    font-size: 13px;
+  }
 }
 
 /* ===== Dark Mode Support ===== */
 @media (prefers-color-scheme: dark) {
-  .login-container {
+  .register-container {
     background: linear-gradient(180deg, #000 0%, #1C1C1E 100%);
   }
 
   .logo-text,
   .title,
   .input-field input,
-  .checkbox-label {
+  .role-label,
+  .success-title,
+  .role-option {
     color: #fff;
   }
 
   .subtitle,
-  .footer p {
+  .footer p,
+  .success-message {
     color: #8E8E93;
   }
 
@@ -679,7 +844,7 @@ const triggerShake = () => {
     background: rgba(255, 255, 255, 0.1);
   }
 
-  .login-card {
+  .register-card {
     background: rgba(30, 30, 30, 0.72);
     border-color: rgba(255, 255, 255, 0.1);
     box-shadow:
@@ -695,16 +860,21 @@ const triggerShake = () => {
     );
   }
 
-  .checkbox {
-    border-color: rgba(255, 255, 255, 0.3);
+  .role-segmented {
+    background: rgba(255, 255, 255, 0.08);
   }
 
-  .signin-button {
+  .role-option.active {
+    background: rgba(255, 255, 255, 0.15);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  }
+
+  .submit-button {
     background: #fff;
     color: #000;
   }
 
-  .signin-button:hover:not(:disabled) {
+  .submit-button:hover:not(:disabled) {
     background: #f0f0f0;
   }
 }

@@ -4,7 +4,7 @@ import { useRoute } from 'vue-router'
 import AppHeader from './components/common/AppHeader.vue'
 
 const route = useRoute()
-const showHeader = computed(() => !route.meta.public)
+const showHeader = computed(() => !route.meta.public && !route.meta.guestOnly)
 </script>
 
 <template>

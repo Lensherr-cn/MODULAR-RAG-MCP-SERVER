@@ -199,6 +199,7 @@
 
     <!-- CTA Section -->
     <section class="cta-section">
+      <div class="cta-glow"></div>
       <div class="cta-content">
         <h2>准备好开始了吗？</h2>
         <p>立即体验智能知识库的强大功能</p>
@@ -1040,28 +1041,56 @@ onMounted(() => {
 
 /* CTA Section */
 .cta-section {
-  background: var(--apple-bg-primary);
-  padding: 100px 24px;
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(180deg, #0d0d0d 0%, #141416 100%);
+  margin: 0 24px 80px;
+  border-radius: 40px;
+  padding: 120px 24px;
   text-align: center;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.18);
+}
+
+.cta-glow {
+  position: absolute;
+  top: -40%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 80%;
+  height: 120%;
+  background: radial-gradient(ellipse at center, rgba(88, 86, 214, 0.22) 0%, transparent 60%);
+  pointer-events: none;
+  filter: blur(60px);
 }
 
 .cta-content {
-  max-width: 600px;
+  position: relative;
+  z-index: 1;
+  max-width: 640px;
   margin: 0 auto;
 
   h2 {
-    font-size: 48px;
-    margin-bottom: 12px;
+    font-size: 52px;
+    font-weight: 700;
+    letter-spacing: -0.015em;
+    color: #ffffff;
+    margin-bottom: 16px;
+    text-shadow: 0 2px 24px rgba(0, 0, 0, 0.25);
 
     @media (max-width: 768px) {
-      font-size: 36px;
+      font-size: 38px;
     }
   }
 
   p {
     font-size: 21px;
-    color: var(--apple-text-secondary);
-    margin-bottom: 40px;
+    line-height: 1.5;
+    color: rgba(255, 255, 255, 0.65);
+    margin-bottom: 48px;
+
+    @media (max-width: 768px) {
+      font-size: 18px;
+    }
   }
 }
 
@@ -1088,21 +1117,27 @@ onMounted(() => {
   text-decoration: none;
 
   &.primary {
-    background: var(--apple-accent);
-    color: white;
+    background: #ffffff;
+    color: #000000;
+    box-shadow: 0 4px 20px rgba(255, 255, 255, 0.15);
 
     &:hover {
-      background: var(--apple-accent-hover);
-      transform: scale(1.02);
+      background: #f2f2f2;
+      transform: translateY(-2px) scale(1.02);
+      box-shadow: 0 8px 28px rgba(255, 255, 255, 0.22);
     }
   }
 
   &.secondary {
-    background: var(--apple-bg-tertiary);
-    color: var(--apple-text-primary);
+    background: rgba(255, 255, 255, 0.08);
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    backdrop-filter: blur(4px);
 
     &:hover {
-      background: var(--apple-border);
+      background: rgba(255, 255, 255, 0.14);
+      border-color: rgba(255, 255, 255, 0.35);
+      transform: translateY(-2px);
     }
   }
 }

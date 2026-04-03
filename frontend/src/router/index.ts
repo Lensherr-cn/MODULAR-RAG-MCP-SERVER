@@ -46,12 +46,24 @@ const router = createRouter({
       name: 'profile',
       component: () => import('@/views/ProfileView.vue'),
       meta: { requiresAuth: true }
+    },
+    {
+      path: '/register',
+      name: 'register',
+      component: () => import('@/views/RegisterView.vue'),
+      meta: { guestOnly: true }
+    },
+    {
+      path: '/admin-register',
+      name: 'admin-register',
+      component: () => import('@/views/AdminRegisterView.vue'),
+      meta: { guestOnly: true }
     }
   ]
 })
 
 // 路由守卫
-router.beforeEach(async (to, from, next) => {
+router.beforeEach(async (to, _from, next) => {
   const userStore = useUserStore()
 
   // 公开页面无需认证

@@ -1020,12 +1020,13 @@ onUnmounted(() => {
   font-size: clamp(32px, 5vw, 48px);
   font-weight: 700;
   letter-spacing: -0.02em;
+  color: #1d1d1f;
   margin-bottom: 16px;
 }
 
 .cta-desc {
   font-size: 20px;
-  color: #6e6e73;
+  color: #434344;
   margin-bottom: 32px;
 }
 

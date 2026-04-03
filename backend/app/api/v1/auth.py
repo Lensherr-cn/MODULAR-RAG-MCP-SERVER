@@ -2,6 +2,7 @@
 Authentication API
 认证相关接口 - 登录、登出、刷新 Token、获取当前用户
 """
+import uuid
 from datetime import timedelta
 from typing import Optional
 
@@ -12,7 +13,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.config import settings
 from app.core.security import (
-    verify_password, create_access_token, decode_token,
+    verify_password, get_password_hash, create_access_token, decode_token,
     blacklist_token, check_login_attempts, record_login_attempt
 )
 from app.core.auth import get_current_user
@@ -28,6 +29,25 @@ class LoginRequest(BaseModel):
     username: str = Field(..., min_length=1, max_length=50, description="用户名")
     password: str = Field(..., min_length=1, description="密码")
     rememberMe: Optional[bool] = Field(default=False, description="记住我（延长 Refresh Token 有效期）")
+
+
+class RegisterRequest(BaseModel):
+    """注册请求"""
+    username: str = Field(..., min_length=1, max_length=50, description="用户名")
+    email: str = Field(..., max_length=100, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$", description="邮箱")
+    department: str = Field(..., min_length=1, max_length=100, description="部门")
+    password: str = Field(..., min_length=6, description="密码")
+    role: Optional[str] = Field(default="user", pattern=r"^(user|admin|leader)$", description="角色：user/admin/leader")
+    permissionCode: Optional[str] = Field(default=None, description="权限标识码（admin/leader 必填）")
+
+
+class RegisterResponse(BaseModel):
+    """注册响应"""
+    id: str
+    username: str
+    email: Optional[str] = None
+    department: Optional[str] = None
+    role: str
 
 
 class LoginResponse(BaseModel):
@@ -105,6 +125,90 @@ def clear_auth_cookies(response: Response):
 
 
 # ============= API Endpoints =============
+
+@router.post(
+    "/register",
+    response_model=dict,
+    summary="用户注册",
+    description="注册新用户，普通用户直接注册；管理员/领导需提供权限标识码"
+)
+async def register(
+    request: RegisterRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    用户注册接口
+
+    - 校验用户名唯一性
+    - admin/leader 角色需校验 permissionCode（后续可替换为更严格的逻辑）
+    - 密码 bcrypt 哈希后入库
+    """
+    # 清理输入
+    username = request.username.strip()
+    email = request.email.strip()
+    department = request.department.strip()
+    permission_code = request.permissionCode.strip() if request.permissionCode else None
+
+    # 检查用户名是否已存在
+    existing_user = db.query(User).filter(User.username == username).first()
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username already exists"
+        )
+
+    # 检查邮箱是否已存在
+    existing_email = db.query(User).filter(User.email == email).first()
+    if existing_email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email already exists"
+        )
+
+    # 权限角色校验（TODO: 后续补充更严格的权限标识校验逻辑）
+    role = (request.role or "user").lower()
+    if role in ("admin", "leader"):
+        if not permission_code:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Permission code is required for admin/leader registration"
+            )
+        # 占位校验：当前仅要求非空，后续可对接配置中心或数据库白名单
+
+    # 创建用户
+    user = User(
+        id=str(uuid.uuid4()),
+        username=username,
+        email=email,
+        department=department,
+        password_hash=get_password_hash(request.password),
+        role=role,
+        is_active="Y"
+    )
+
+    try:
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    except Exception:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Registration failed due to database error"
+        )
+
+    return {
+        "code": 200,
+        "message": "Registration successful",
+        "data": {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "department": user.department,
+            "role": user.role,
+        }
+    }
+
 
 @router.post(
     "/login",
