@@ -344,3 +344,39 @@ async def get_favorite_count(
         data={"count": count},
         message="success"
     )
+
+
+@router.post("/{doc_id}/parse", response_model=ApiResponse)
+async def parse_document(
+    doc_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    解析文档内容
+
+    - 触发文档解析流程
+    - 返回解析任务ID或结果
+    """
+    # TODO: 实现文档解析逻辑
+    # 这里可以：
+    # 1. 检查文档是否存在且用户有权限访问
+    # 2. 创建解析任务（异步处理）
+    # 3. 或者同步解析并返回结果
+
+    doc = document_service.get_document(doc_id, user_id=current_user.id)
+    if not doc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found or no permission"
+        )
+
+    # Placeholder for actual parsing logic
+    return ApiResponse(
+        code=200,
+        data={
+            "doc_id": doc_id,
+            "status": "pending",
+            "message": "Document parsing started"
+        },
+        message="Document parsing initiated"
+    )

@@ -56,6 +56,20 @@
       >
         <el-icon :size="16"><Delete /></el-icon>
       </button>
+      <div class="action-spacer"></div>
+      <button
+        class="parse-btn"
+        :class="{ parsing: isParsing }"
+        title="AI解析文档"
+        @click="handleParse"
+      >
+        <span class="parse-btn-glow"></span>
+        <span class="parse-btn-ripple"></span>
+        <el-icon :size="18" class="parse-icon">
+          <MagicStick />
+        </el-icon>
+        <span class="parse-text">{{ isParsing ? '解析中' : '解析' }}</span>
+      </button>
     </div>
   </div>
 </template>
@@ -74,11 +88,12 @@ import {
   Delete,
   View as IconView,
   OfficeBuilding,
-  Lock
+  Lock,
+  MagicStick
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import type { Document as DocType } from '@/api/document'
-import { toggleFavoriteApi, getFavoriteStatusApi } from '@/api/document'
+import { toggleFavoriteApi, getFavoriteStatusApi, parseDocumentApi } from '@/api/document'
 
 const props = defineProps<{
   document: DocType
@@ -90,10 +105,12 @@ const emit = defineEmits<{
   download: [doc: DocType]
   delete: [doc: DocType]
   favoriteChange: [docId: string, isFavorite: boolean]
+  parse: [doc: DocType]
 }>()
 
 const isFavorite = ref(props.favorite || false)
 const isLoading = ref(false)
+const isParsing = ref(false)
 
 // 组件挂载时获取收藏状态
 onMounted(async () => {
@@ -197,6 +214,28 @@ const handleFavorite = async () => {
 
 const handleDelete = () => {
   emit('delete', props.document)
+}
+
+const handleParse = async () => {
+  if (isParsing.value) return
+  isParsing.value = true
+
+  try {
+    const { data } = await parseDocumentApi(props.document.id)
+    if (data.code === 200) {
+      ElMessage.success('文档解析任务已启动')
+      emit('parse', props.document)
+    } else {
+      ElMessage.error(data.message || '解析失败')
+    }
+  } catch (error: any) {
+    ElMessage.error(error.response?.data?.detail || '解析请求失败')
+  } finally {
+    // Reset after animation
+    setTimeout(() => {
+      isParsing.value = false
+    }, 1500)
+  }
 }
 </script>
 
@@ -329,6 +368,7 @@ const handleDelete = () => {
   gap: 8px;
   opacity: 0;
   transition: opacity var(--apple-transition-base);
+  align-items: center;
 
   @media (max-width: 1024px) {
     opacity: 1;
@@ -365,5 +405,141 @@ const handleDelete = () => {
       }
     }
   }
+
+  .action-spacer {
+    flex: 1;
+  }
+
+  // Cyber-luxe Parse Button
+  .parse-btn {
+    position: relative;
+    height: 44px;
+    padding: 0 16px;
+    border-radius: 22px;
+    border: none;
+    background: linear-gradient(135deg, #7c3aed 0%, #db2777 50%, #f59e0b 100%);
+    background-size: 200% 200%;
+    color: white;
+    font-size: 13px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    overflow: hidden;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow:
+      0 4px 15px rgba(124, 58, 237, 0.4),
+      0 0 0 1px rgba(255, 255, 255, 0.1) inset;
+    animation: gradientShift 3s ease infinite;
+
+    &::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(255,255,255,0.2) 0%, transparent 50%);
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+
+    &:hover {
+      transform: translateY(-2px) scale(1.05);
+      box-shadow:
+        0 8px 25px rgba(124, 58, 237, 0.5),
+        0 0 30px rgba(219, 39, 119, 0.3),
+        0 0 0 1px rgba(255, 255, 255, 0.2) inset;
+      background-position: 100% 100%;
+
+      &::before {
+        opacity: 1;
+      }
+
+      .parse-btn-glow {
+        opacity: 1;
+        animation: pulseGlow 1.5s ease-in-out infinite;
+      }
+
+      .parse-btn-ripple {
+        animation: ripple 1s ease-out infinite;
+      }
+
+      .parse-icon {
+        animation: wandWave 0.6s ease-in-out;
+      }
+    }
+
+    &:active {
+      transform: translateY(0) scale(1.02);
+    }
+
+    &.parsing {
+      background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+      animation: parsingPulse 1.5s ease-in-out infinite;
+
+      .parse-icon {
+        animation: spin 1s linear infinite;
+      }
+    }
+
+    .parse-btn-glow {
+      position: absolute;
+      inset: -2px;
+      background: linear-gradient(135deg, #7c3aed, #db2777, #f59e0b);
+      border-radius: 24px;
+      opacity: 0;
+      filter: blur(8px);
+      z-index: -1;
+      transition: opacity 0.3s;
+    }
+
+    .parse-btn-ripple {
+      position: absolute;
+      inset: 0;
+      border-radius: 22px;
+      border: 2px solid rgba(255, 255, 255, 0.5);
+      opacity: 0;
+    }
+
+    .parse-icon {
+      transition: transform 0.3s;
+    }
+
+    .parse-text {
+      position: relative;
+      z-index: 1;
+      letter-spacing: 0.02em;
+    }
+  }
+}
+
+@keyframes gradientShift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+@keyframes pulseGlow {
+  0%, 100% { opacity: 0.6; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.05); }
+}
+
+@keyframes ripple {
+  0% { transform: scale(1); opacity: 0.5; }
+  100% { transform: scale(1.3); opacity: 0; }
+}
+
+@keyframes wandWave {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-15deg); }
+  75% { transform: rotate(15deg); }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes parsingPulse {
+  0%, 100% { box-shadow: 0 4px 15px rgba(5, 150, 105, 0.4); }
+  50% { box-shadow: 0 4px 25px rgba(5, 150, 105, 0.6), 0 0 20px rgba(16, 185, 129, 0.4); }
 }
 </style>

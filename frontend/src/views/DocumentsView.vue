@@ -124,6 +124,7 @@
               @preview="handlePreview(doc)"
               @download="handleDownloadDocument"
               @delete="handleDeleteDocument"
+              @parse="handleParseDocument"
             />
           </div>
 
@@ -452,6 +453,12 @@ const handleDeleteDocument = async (doc: DocType) => {
       ElMessage.error(error.response?.data?.message || '删除失败')
     }
   }
+}
+
+// Handle document parsing
+const handleParseDocument = (doc: DocType) => {
+  ElMessage.info(`开始解析文档: ${doc.name}`)
+  // TODO: Implement actual parse logic
 }
 
 // Upload dialog methods

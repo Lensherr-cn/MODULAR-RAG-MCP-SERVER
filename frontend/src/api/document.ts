@@ -97,3 +97,8 @@ export function getFavoritesApi(params?: { page?: number; page_size?: number }) 
 export function getFavoriteCountApi() {
   return get<{ count: number }>('/v1/documents/favorites/count')
 }
+
+// 解析文档
+export function parseDocumentApi(documentId: string) {
+  return post<{ doc_id: string; status: string; message: string }>(`/v1/documents/${documentId}/parse`)
+}
