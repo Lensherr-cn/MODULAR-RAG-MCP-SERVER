@@ -180,9 +180,12 @@ async def get_categories(
     current_user: User = Depends(get_current_user)
 ):
     """
-    获取文档分类列表
+    获取文档分类列表及各分类下的文档数量
+
+    - 返回每个分类及其下的文档数量
+    - 数量根据当前用户的权限计算（公共文档 + 自己的文档 + 同部门文档）
     """
-    categories = document_service.get_categories()
+    categories = document_service.get_categories(user_id=current_user.id)
     return ApiResponse(
         code=200,
         data={"categories": categories},

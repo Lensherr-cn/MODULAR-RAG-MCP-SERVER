@@ -68,5 +68,5 @@ export function deleteDocumentApi(id: string) {
 
 // 获取分类列表
 export function getCategoriesApi() {
-  return get<Category[]>('/v1/categories')
+  return get<{ categories: Category[] }>('/v1/documents/categories/all')
 }

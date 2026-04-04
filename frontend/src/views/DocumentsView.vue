@@ -104,7 +104,7 @@
               :style="{ animationDelay: `${index * 30}ms` }"
               class="doc-card-animate"
               @preview="handlePreview(doc)"
-              @click="handlePreview(doc)"
+              @delete="handleDeleteDocument"
             />
           </div>
 
@@ -242,9 +242,9 @@ import { Search, Close, Document, FullScreen, Plus, Loading, Upload, Lock, Offic
 import CategoryTree from '@/components/document/CategoryTree.vue'
 import DocCard from '@/components/document/DocCard.vue'
 import DocPreview from '@/components/document/DocPreview.vue'
-import { getDocumentsApi, getCategoriesApi, uploadDocumentApi } from '@/api/document'
+import { getDocumentsApi, getCategoriesApi, uploadDocumentApi, deleteDocumentApi } from '@/api/document'
 import type { Document as DocType, Category } from '@/api/document'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 
 const route = useRoute()
 
@@ -345,17 +345,17 @@ const loadDocuments = async () => {
 const loadCategories = async () => {
   try {
     const { data } = await getCategoriesApi()
-    if (data.data) {
-      categories.value = data.data
+    if (data.data?.categories) {
+      categories.value = data.data.categories
     }
   } catch {
     categories.value = [
-      { name: '产品文档', count: 12 },
-      { name: '技术文档', count: 23 },
-      { name: '规章制度', count: 8 },
-      { name: '培训资料', count: 15 },
-      { name: '流程规范', count: 10 },
-      { name: '其他', count: 5 },
+      { name: '产品文档', count: 0 },
+      { name: '技术文档', count: 0 },
+      { name: '规章制度', count: 0 },
+      { name: '培训资料', count: 0 },
+      { name: '流程规范', count: 0 },
+      { name: '其他', count: 0 },
     ]
   }
 }
@@ -387,6 +387,32 @@ const handleSizeChange = () => {
 const handlePreview = (doc: DocType) => {
   selectedDocument.value = doc
   previewVisible.value = true
+}
+
+const handleDeleteDocument = async (doc: DocType) => {
+  try {
+    await ElMessageBox.confirm(
+      `确定要删除文档 "${doc.name}" 吗？`,
+      '确认删除',
+      {
+        confirmButtonText: '删除',
+        cancelButtonText: '取消',
+        type: 'warning',
+      }
+    )
+
+    await deleteDocumentApi(doc.id)
+    ElMessage.success('文档删除成功')
+
+    // Refresh document list
+    await loadDocuments()
+    // Refresh categories count
+    await loadCategories()
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      ElMessage.error(error.response?.data?.message || '删除失败')
+    }
+  }
 }
 
 // Upload dialog methods

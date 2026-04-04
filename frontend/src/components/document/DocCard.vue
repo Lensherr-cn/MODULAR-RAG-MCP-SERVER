@@ -43,6 +43,13 @@
           <component :is="isFavorite ? StarFilled : Star" />
         </el-icon>
       </button>
+      <button
+        class="action-btn delete-btn"
+        title="删除"
+        @click="handleDelete"
+      >
+        <el-icon :size="16"><Delete /></el-icon>
+      </button>
     </div>
   </div>
 </template>
@@ -57,7 +64,8 @@ import {
   Star,
   StarFilled,
   Collection,
-  Clock
+  Clock,
+  Delete
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import type { Document as DocType } from '@/api/document'
@@ -71,6 +79,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   preview: [doc: DocType]
   download: [doc: DocType]
+  delete: [doc: DocType]
 }>()
 
 const isFavorite = ref(props.favorite || false)
@@ -128,6 +137,10 @@ const handleFavorite = async () => {
     isFavorite.value = !isFavorite.value
     ElMessage.success(isFavorite.value ? '收藏成功' : '取消收藏')
   }
+}
+
+const handleDelete = () => {
+  emit('delete', props.document)
 }
 </script>
 
@@ -262,6 +275,13 @@ const handleFavorite = async () => {
     &.active {
       background: rgba(255, 204, 0, 0.15);
       color: #ff9500;
+    }
+
+    &.delete-btn {
+      &:hover {
+        background: rgba(255, 59, 48, 0.15);
+        color: #ff3b30;
+      }
     }
   }
 }

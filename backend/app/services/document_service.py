@@ -209,10 +209,12 @@ class DocumentService:
             if not doc:
                 return False
 
-            # 权限检查：只有所有者可以删除
+            # 权限检查：只有所有者或管理员可以删除
             if user_id and doc.owner_id != user_id:
-                # TODO: 检查用户是否是管理员
-                return False
+                # 检查用户是否是管理员
+                user = db.query(User).filter(User.id == user_id).first()
+                if not user or user.role != "admin":
+                    return False
 
             db.delete(doc)
             db.commit()
@@ -220,7 +222,7 @@ class DocumentService:
         finally:
             db.close()
 
-    def get_categories(self) -> List[Dict[str, Any]]:
+    def get_categories(self, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """获取分类列表及文档数量"""
         db = self._get_db()
         try:
@@ -229,11 +231,27 @@ class DocumentService:
 
             result = []
             for cat in categories:
-                # 统计每个分类的文档数量
-                count = db.query(Document).filter(
-                    Document.category == cat.name,
-                    Document.visibility == "public"  # 只统计公共文档
-                ).count()
+                # 统计每个分类的文档数量（考虑数据隔离）
+                query = db.query(Document).filter(Document.category == cat.name)
+
+                if user_id:
+                    # 用户能看到：公共文档 + 自己的文档 + 同部门的文档
+                    user = db.query(User).filter(User.id == user_id).first()
+                    if user:
+                        query = query.filter(
+                            or_(
+                                Document.visibility == "public",
+                                Document.owner_id == user_id,
+                                (Document.visibility == "department") & (Document.department == user.department)
+                            )
+                        )
+                    else:
+                        query = query.filter(Document.visibility == "public")
+                else:
+                    # 未登录用户只能看公共文档
+                    query = query.filter(Document.visibility == "public")
+
+                count = query.count()
 
                 result.append({
                     "name": cat.name,
