@@ -129,6 +129,11 @@ def _register_builtin_providers() -> None:
         EmbeddingFactory.register_provider("ollama", OllamaEmbedding)
     except ImportError:
         pass  # Ollama provider not available
+    try:
+        from src.libs.embedding.qwen_embedding import QwenEmbedding
+        EmbeddingFactory.register_provider("qwen", QwenEmbedding)
+    except ImportError:
+        pass
 
 
 # Register providers when module is imported
