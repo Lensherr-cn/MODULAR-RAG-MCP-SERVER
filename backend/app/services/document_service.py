@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db_context
 from app.models.document import Document, DocumentChunk, Category
-from app.models.user import User
+from app.models.user import User, Favorite
 from app.services.document_parser import document_parser
 
 
@@ -339,6 +339,105 @@ class DocumentService:
             return doc.department == user.department
 
         return False
+
+    def toggle_favorite(self, document_id: str, user_id: str) -> Dict[str, Any]:
+        """
+        切换文档收藏状态
+
+        Returns:
+            {"is_favorite": bool, "message": str}
+        """
+        db = self._get_db()
+        try:
+            # 检查文档是否存在且用户有权限访问
+            doc = db.query(Document).filter(Document.id == document_id).first()
+            if not doc:
+                return {"is_favorite": False, "message": "Document not found"}
+
+            if not self._can_access_document(doc, user_id, db):
+                return {"is_favorite": False, "message": "No permission to access this document"}
+
+            # 检查是否已收藏
+            existing = db.query(Favorite).filter(
+                Favorite.user_id == user_id,
+                Favorite.document_id == document_id
+            ).first()
+
+            if existing:
+                # 取消收藏
+                db.delete(existing)
+                db.commit()
+                return {"is_favorite": False, "message": "Removed from favorites"}
+            else:
+                # 添加收藏
+                favorite = Favorite(
+                    id=str(uuid.uuid4()),
+                    user_id=user_id,
+                    document_id=document_id
+                )
+                db.add(favorite)
+                db.commit()
+                return {"is_favorite": True, "message": "Added to favorites"}
+        finally:
+            db.close()
+
+    def get_favorites(self, user_id: str, page: int = 1, page_size: int = 20) -> Dict[str, Any]:
+        """
+        获取用户的收藏文档列表
+        """
+        db = self._get_db()
+        try:
+            query = db.query(Favorite).filter(Favorite.user_id == user_id)
+
+            # 计算总数
+            total = query.count()
+
+            # 排序和分页
+            query = query.order_by(Favorite.created_at.desc())
+            query = query.offset((page - 1) * page_size).limit(page_size)
+
+            favorites = query.all()
+
+            # 获取文档详情
+            items = []
+            for fav in favorites:
+                doc = db.query(Document).filter(Document.id == fav.document_id).first()
+                if doc and self._can_access_document(doc, user_id, db):
+                    items.append(self._doc_to_dict(doc))
+
+            return {
+                "total": total,
+                "page": page,
+                "page_size": page_size,
+                "items": items
+            }
+        finally:
+            db.close()
+
+    def get_favorite_count(self, user_id: str) -> int:
+        """
+        获取用户的收藏数量
+        """
+        db = self._get_db()
+        try:
+            count = db.query(Favorite).filter(Favorite.user_id == user_id).count()
+            return count
+        finally:
+            db.close()
+
+    def is_favorite(self, document_id: str, user_id: str) -> bool:
+        """
+        检查文档是否已被用户收藏
+        """
+        db = self._get_db()
+        try:
+            existing = db.query(Favorite).filter(
+                Favorite.user_id == user_id,
+                Favorite.document_id == document_id
+            ).first()
+            return existing is not None
+        finally:
+            db.close()
 
 
 # 全局文档服务实例

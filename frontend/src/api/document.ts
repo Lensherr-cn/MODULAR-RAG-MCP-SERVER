@@ -76,3 +76,23 @@ export function downloadDocumentApi(id: string): string {
 export function getCategoriesApi() {
   return get<{ categories: Category[] }>('/v1/documents/categories/all')
 }
+
+// 切换收藏状态
+export function toggleFavoriteApi(documentId: string) {
+  return post<{ is_favorite: boolean }>(`/v1/documents/${documentId}/favorite`)
+}
+
+// 获取收藏状态
+export function getFavoriteStatusApi(documentId: string) {
+  return get<{ is_favorite: boolean }>(`/v1/documents/${documentId}/favorite/status`)
+}
+
+// 获取收藏列表
+export function getFavoritesApi(params?: { page?: number; page_size?: number }) {
+  return get<DocumentListResponse>('/v1/documents/favorites/my', { params })
+}
+
+// 获取收藏数量
+export function getFavoriteCountApi() {
+  return get<{ count: number }>('/v1/documents/favorites/count')
+}

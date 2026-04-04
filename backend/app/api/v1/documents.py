@@ -251,3 +251,96 @@ async def delete_document(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Document not found or no permission to delete"
         )
+
+
+@router.post("/{doc_id}/favorite", response_model=ApiResponse)
+async def toggle_favorite(
+    doc_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    切换文档收藏状态（收藏/取消收藏）
+
+    - 用户只能收藏自己有权限访问的文档
+    """
+    result = document_service.toggle_favorite(doc_id, user_id=current_user.id)
+
+    if result.get("message") == "Document not found":
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found"
+        )
+
+    if result.get("message") == "No permission to access this document":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No permission to access this document"
+        )
+
+    return ApiResponse(
+        code=200,
+        data={"is_favorite": result["is_favorite"]},
+        message=result["message"]
+    )
+
+
+@router.get("/{doc_id}/favorite/status", response_model=ApiResponse)
+async def get_favorite_status(
+    doc_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    获取文档的收藏状态
+
+    - 返回当前用户是否已收藏该文档
+    """
+    is_fav = document_service.is_favorite(doc_id, user_id=current_user.id)
+
+    return ApiResponse(
+        code=200,
+        data={"is_favorite": is_fav},
+        message="success"
+    )
+
+
+@router.get("/favorites/my", response_model=ApiResponse)
+async def get_my_favorites(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    获取当前用户的收藏文档列表
+
+    - 支持分页
+    - 只返回用户有权限访问的收藏文档
+    """
+    result = document_service.get_favorites(
+        user_id=current_user.id,
+        page=page,
+        page_size=page_size
+    )
+
+    return ApiResponse(
+        code=200,
+        data=result,
+        message="success"
+    )
+
+
+@router.get("/favorites/count", response_model=ApiResponse)
+async def get_favorite_count(
+    current_user: User = Depends(get_current_user)
+):
+    """
+    获取当前用户的收藏数量
+
+    - 用于个人中心等场景展示
+    """
+    count = document_service.get_favorite_count(user_id=current_user.id)
+
+    return ApiResponse(
+        code=200,
+        data={"count": count},
+        message="success"
+    )

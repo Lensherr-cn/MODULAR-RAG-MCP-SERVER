@@ -55,7 +55,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import {
   Document,
   DocumentCopy,
@@ -69,7 +69,7 @@ import {
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import type { Document as DocType } from '@/api/document'
-import { toggleFavoriteApi } from '@/api/user'
+import { toggleFavoriteApi, getFavoriteStatusApi } from '@/api/document'
 
 const props = defineProps<{
   document: DocType
@@ -80,9 +80,25 @@ const emit = defineEmits<{
   preview: [doc: DocType]
   download: [doc: DocType]
   delete: [doc: DocType]
+  favoriteChange: [docId: string, isFavorite: boolean]
 }>()
 
 const isFavorite = ref(props.favorite || false)
+const isLoading = ref(false)
+
+// 组件挂载时获取收藏状态
+onMounted(async () => {
+  if (!props.favorite) {
+    try {
+      const { data } = await getFavoriteStatusApi(props.document.id)
+      if (data.data) {
+        isFavorite.value = data.data.is_favorite
+      }
+    } catch {
+      // 忽略错误，保持默认状态
+    }
+  }
+})
 
 const fileIcon = computed(() => {
   const icons: Record<string, any> = {
@@ -128,13 +144,27 @@ const handleDownload = () => {
 }
 
 const handleFavorite = async () => {
+  if (isLoading.value) return
+
+  isLoading.value = true
+  // 乐观更新
+  const previousState = isFavorite.value
+  isFavorite.value = !isFavorite.value
+
   try {
-    await toggleFavoriteApi(props.document.id)
-    isFavorite.value = !isFavorite.value
-    ElMessage.success(isFavorite.value ? '收藏成功' : '取消收藏')
-  } catch {
-    isFavorite.value = !isFavorite.value
-    ElMessage.success(isFavorite.value ? '收藏成功' : '取消收藏')
+    const { data } = await toggleFavoriteApi(props.document.id)
+    if (data.data) {
+      isFavorite.value = data.data.is_favorite
+      ElMessage.success(isFavorite.value ? '收藏成功' : '取消收藏')
+      // 触发事件通知父组件
+      emit('favorite-change', props.document.id, isFavorite.value)
+    }
+  } catch (error: any) {
+    // 失败时回滚状态
+    isFavorite.value = previousState
+    ElMessage.error(error.response?.data?.detail || '操作失败，请重试')
+  } finally {
+    isLoading.value = false
   }
 }
 

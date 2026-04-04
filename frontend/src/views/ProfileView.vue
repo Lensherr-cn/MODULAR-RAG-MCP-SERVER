@@ -49,7 +49,7 @@
             <el-icon :size="24"><Star /></el-icon>
           </div>
           <div class="stat-info">
-            <span class="stat-value">{{ favorites.length }}</span>
+            <span class="stat-value">{{ favoriteCount }}</span>
             <span class="stat-label">收藏文档</span>
           </div>
         </div>
@@ -124,14 +124,14 @@
                 v-for="item in favorites"
                 :key="item.id"
                 class="favorite-item"
-                @click="goToDocument(item.document_id)"
+                @click="goToDocument(item.id)"
               >
                 <div class="item-icon document">
                   <el-icon :size="20"><Document /></el-icon>
                 </div>
                 <div class="item-content">
-                  <span class="item-title">{{ item.document_name }}</span>
-                  <span class="item-time">{{ formatDateTime(item.created_at) }}</span>
+                  <span class="item-title">{{ item.name }}</span>
+                  <span class="item-time">{{ formatDateTime(item.updated_at) }}</span>
                 </div>
                 <button class="remove-btn" @click.stop="removeFavorite(item.id)">
                   <el-icon :size="16"><StarFilled /></el-icon>
@@ -193,15 +193,14 @@ import {
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useUserStore } from '@/stores/user'
+import { getFavoritesApi, getFavoriteCountApi, toggleFavoriteApi } from '@/api/document'
 import {
   getQueryHistoryApi,
-  getFavoritesApi,
-  deleteFavoriteApi,
   getFeedbacksApi,
   type QueryHistory,
-  type Favorite,
   type Feedback
 } from '@/api/user'
+import type { Document as DocType } from '@/api/document'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -214,7 +213,8 @@ const tabs = [
 ]
 
 const queryHistory = ref<QueryHistory[]>([])
-const favorites = ref<Favorite[]>([])
+const favorites = ref<DocType[]>([])
+const favoriteCount = ref(0)
 const feedbacks = ref<Feedback[]>([])
 
 const loadingHistory = ref(false)
@@ -273,16 +273,24 @@ const loadFavorites = async () => {
   loadingFavorites.value = true
   try {
     const { data } = await getFavoritesApi()
-    if (data.data) {
-      favorites.value = data.data
+    if (data.data?.items) {
+      favorites.value = data.data.items
     }
   } catch {
-    favorites.value = [
-      { id: '1', document_id: '1', document_name: '产品使用手册 v2.0.pdf', created_at: new Date().toISOString() },
-      { id: '2', document_id: '2', document_name: '技术架构设计文档.docx', created_at: new Date().toISOString() },
-    ]
+    favorites.value = []
   } finally {
     loadingFavorites.value = false
+  }
+}
+
+const loadFavoriteCount = async () => {
+  try {
+    const { data } = await getFavoriteCountApi()
+    if (data.data) {
+      favoriteCount.value = data.data.count
+    }
+  } catch {
+    favoriteCount.value = 0
   }
 }
 
@@ -321,12 +329,12 @@ const goToDocument = (id: string) => {
 
 const removeFavorite = async (id: string) => {
   try {
-    await deleteFavoriteApi(id)
+    await toggleFavoriteApi(id)
     favorites.value = favorites.value.filter(f => f.id !== id)
+    favoriteCount.value = Math.max(0, favoriteCount.value - 1)
     ElMessage.success('已取消收藏')
   } catch {
-    favorites.value = favorites.value.filter(f => f.id !== id)
-    ElMessage.success('已取消收藏')
+    ElMessage.error('取消收藏失败')
   }
 }
 
@@ -339,6 +347,7 @@ const handleLogout = () => {
 onMounted(() => {
   loadQueryHistory()
   loadFavorites()
+  loadFavoriteCount()
   loadFeedbacks()
 })
 </script>

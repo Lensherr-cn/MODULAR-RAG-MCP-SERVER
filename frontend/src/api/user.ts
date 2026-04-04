@@ -17,13 +17,6 @@ export interface QueryHistory {
   conversation_id?: string
 }
 
-export interface Favorite {
-  id: string
-  document_id: string
-  document_name: string
-  created_at: string
-}
-
 export interface Feedback {
   id: string
   content: string
@@ -39,21 +32,6 @@ export function getUserProfileApi() {
 // 获取查询历史
 export function getQueryHistoryApi(params?: { limit?: number }) {
   return get<QueryHistory[]>('/v1/user/history', { params })
-}
-
-// 获取收藏列表
-export function getFavoritesApi() {
-  return get<Favorite[]>('/v1/user/favorites')
-}
-
-// 添加/取消收藏
-export function toggleFavoriteApi(documentId: string) {
-  return post(`/v1/user/favorites/${documentId}`)
-}
-
-// 删除收藏
-export function deleteFavoriteApi(id: string) {
-  return del(`/v1/user/favorites/${id}`)
 }
 
 // 提交反馈
