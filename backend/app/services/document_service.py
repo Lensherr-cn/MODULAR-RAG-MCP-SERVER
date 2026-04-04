@@ -153,6 +153,7 @@ class DocumentService:
                 file_type=file_type,
                 file_size=doc_data.get("file_size", 0),
                 chunk_count=0,
+                url=doc_data.get("url"),
                 owner_id=user_id,
                 visibility=doc_data.get("visibility", "public"),
                 department=doc_data.get("department"),
@@ -203,6 +204,7 @@ class DocumentService:
 
     def delete_document(self, doc_id: str, user_id: Optional[str] = None) -> bool:
         """删除文档（只有所有者或管理员可以删除）"""
+        import os
         db = self._get_db()
         try:
             doc = db.query(Document).filter(Document.id == doc_id).first()
@@ -215,6 +217,13 @@ class DocumentService:
                 user = db.query(User).filter(User.id == user_id).first()
                 if not user or user.role != "admin":
                     return False
+
+            # 删除本地文件
+            if doc.url and os.path.exists(doc.url):
+                try:
+                    os.remove(doc.url)
+                except Exception as e:
+                    print(f"Warning: Failed to delete file {doc.url}: {e}")
 
             db.delete(doc)
             db.commit()
@@ -288,6 +297,7 @@ class DocumentService:
             "file_type": doc.file_type,
             "file_size": doc.file_size,
             "chunk_count": doc.chunk_count,
+            "url": doc.url,
             "created_at": doc.created_at.isoformat() if doc.created_at else None,
             "updated_at": doc.updated_at.isoformat() if doc.updated_at else None,
         }

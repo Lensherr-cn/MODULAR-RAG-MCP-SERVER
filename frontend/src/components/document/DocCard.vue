@@ -125,7 +125,6 @@ const formatDate = (dateStr: string) => {
 
 const handleDownload = () => {
   emit('download', props.document)
-  ElMessage.info('下载功能开发中')
 }
 
 const handleFavorite = async () => {

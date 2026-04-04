@@ -8,6 +8,7 @@ export interface Document {
   file_type: string
   file_size: number
   chunk_count: number
+  url?: string
   created_at: string
   updated_at: string
 }
@@ -64,6 +65,11 @@ export function uploadDocumentApi(formData: FormData) {
 // 删除文档
 export function deleteDocumentApi(id: string) {
   return del(`/v1/documents/${id}`)
+}
+
+// 下载文档
+export function downloadDocumentApi(id: string): string {
+  return `/api/v1/documents/${id}/download`
 }
 
 // 获取分类列表

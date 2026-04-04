@@ -20,8 +20,8 @@
           </div>
           <div class="header-actions">
             <button class="primary-button" :disabled="uploading" @click="openUploadDialog">
-              <el-icon v-if="!uploading" :size="16"><Plus /></el-icon>
-              <el-icon v-else class="rotating" :size="16"><Loading /></el-icon>
+              <el-icon v-if="!uploading" :size="18"><Plus /></el-icon>
+              <el-icon v-else class="rotating" :size="18"><Loading /></el-icon>
               <span>{{ uploading ? '上传中' : '上传文档' }}</span>
             </button>
           </div>
@@ -65,24 +65,42 @@
         <div class="results-bar">
           <span class="results-count">共 {{ total }} 个文档</span>
           <div v-if="selectedCategory || searchKeyword || selectedFileType" class="active-filters">
-            <span class="filter-tag" v-if="selectedCategory">
+            <el-tag
+              v-if="selectedCategory"
+              closable
+              type="primary"
+              effect="light"
+              @close="selectedCategory = ''; handleCategorySelect()"
+            >
               {{ selectedCategory }}
-              <button @click="selectedCategory = ''; handleCategorySelect()">
-                <el-icon :size="10"><Close /></el-icon>
-              </button>
-            </span>
-            <span class="filter-tag" v-if="searchKeyword">
+            </el-tag>
+            <el-tag
+              v-if="searchKeyword"
+              closable
+              type="info"
+              effect="light"
+              @close="searchKeyword = ''; handleSearch()"
+            >
               "{{ searchKeyword }}"
-              <button @click="searchKeyword = ''; handleSearch()">
-                <el-icon :size="10"><Close /></el-icon>
-              </button>
-            </span>
-            <span class="filter-tag" v-if="selectedFileType">
+            </el-tag>
+            <el-tag
+              v-if="selectedFileType"
+              closable
+              type="success"
+              effect="light"
+              @close="selectedFileType = ''; handleFilterChange()"
+            >
               {{ fileTypeOptions.find(o => o.value === selectedFileType)?.label }}
-              <button @click="selectedFileType = ''; handleFilterChange()">
-                <el-icon :size="10"><Close /></el-icon>
-              </button>
-            </span>
+            </el-tag>
+            <el-button
+              link
+              type="primary"
+              size="small"
+              class="clear-all-btn"
+              @click="clearAllFilters"
+            >
+              清除全部
+            </el-button>
           </div>
         </div>
 
@@ -104,6 +122,7 @@
               :style="{ animationDelay: `${index * 30}ms` }"
               class="doc-card-animate"
               @preview="handlePreview(doc)"
+              @download="handleDownloadDocument"
               @delete="handleDeleteDocument"
             />
           </div>
@@ -242,7 +261,7 @@ import { Search, Close, Document, FullScreen, Plus, Loading, Upload, Lock, Offic
 import CategoryTree from '@/components/document/CategoryTree.vue'
 import DocCard from '@/components/document/DocCard.vue'
 import DocPreview from '@/components/document/DocPreview.vue'
-import { getDocumentsApi, getCategoriesApi, uploadDocumentApi, deleteDocumentApi } from '@/api/document'
+import { getDocumentsApi, getCategoriesApi, uploadDocumentApi, deleteDocumentApi, downloadDocumentApi } from '@/api/document'
 import type { Document as DocType, Category } from '@/api/document'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
@@ -375,6 +394,14 @@ const handleFilterChange = () => {
   loadDocuments()
 }
 
+const clearAllFilters = () => {
+  selectedCategory.value = ''
+  searchKeyword.value = ''
+  selectedFileType.value = ''
+  page.value = 1
+  loadDocuments()
+}
+
 const handlePageChange = () => {
   loadDocuments()
 }
@@ -387,6 +414,18 @@ const handleSizeChange = () => {
 const handlePreview = (doc: DocType) => {
   selectedDocument.value = doc
   previewVisible.value = true
+}
+
+const handleDownloadDocument = (doc: DocType) => {
+  const downloadUrl = downloadDocumentApi(doc.id)
+  // Create a temporary link and trigger download
+  const link = document.createElement('a')
+  link.href = downloadUrl
+  link.download = doc.name
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  ElMessage.success('开始下载')
 }
 
 const handleDeleteDocument = async (doc: DocType) => {
@@ -509,8 +548,9 @@ const handleUploadSubmit = async () => {
     if (data.data?.id) {
       ElMessage.success('文档上传成功')
       closeUploadDialog()
-      // Refresh document list
+      // Refresh document list and categories count
       await loadDocuments()
+      await loadCategories()
     } else {
       ElMessage.error(data.message || '上传失败')
     }
@@ -641,32 +681,45 @@ onMounted(() => {
 .primary-button {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 10px 18px;
-  background: var(--system-blue);
+  gap: 10px;
+  padding: 14px 28px;
+  background: linear-gradient(135deg, #007AFF 0%, #0056CC 100%);
   color: white;
   border: none;
   border-radius: 980px;
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 16px;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 0.5px 2px rgba(0, 122, 255, 0.15);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow:
+    0 4px 12px rgba(0, 122, 255, 0.4),
+    0 8px 24px rgba(0, 122, 255, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
 
   &:hover:not(:disabled) {
-    background: var(--system-blue-hover);
-    transform: translateY(-0.5px);
-    box-shadow: 0 2px 8px rgba(0, 122, 255, 0.25);
+    background: linear-gradient(135deg, #007AFF 0%, #004499 100%);
+    transform: translateY(-3px) scale(1.02);
+    box-shadow:
+      0 8px 20px rgba(0, 122, 255, 0.5),
+      0 16px 32px rgba(0, 122, 255, 0.25),
+      inset 0 1px 0 rgba(255, 255, 255, 0.25);
   }
 
   &:active:not(:disabled) {
     transform: translateY(0);
-    box-shadow: 0 0.5px 2px rgba(0, 122, 255, 0.15);
+    box-shadow:
+      0 1px 4px rgba(0, 122, 255, 0.3),
+      inset 0 2px 4px rgba(0, 0, 0, 0.1);
   }
 
   &:disabled {
-    opacity: 0.6;
+    opacity: 0.5;
     cursor: not-allowed;
+    box-shadow: none;
+  }
+
+  .el-icon {
+    filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.1));
   }
 }
 
@@ -839,38 +892,38 @@ onMounted(() => {
 
 .active-filters {
   display: flex;
+  align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-}
 
-.filter-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 10px 4px 12px;
-  background: var(--system-gray6);
-  border-radius: 100px;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text-secondary);
+  .el-tag {
+    border-radius: 6px;
+    font-size: 13px;
+    height: 28px;
+    padding: 0 10px;
+    font-weight: 500;
 
-  button {
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-    border: none;
-    background: var(--system-gray4);
-    color: var(--text-tertiary);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    padding: 0;
-    transition: all 0.15s ease;
+    :deep(.el-tag__close) {
+      font-size: 12px;
+      color: inherit;
+      opacity: 0.7;
+      transition: opacity 0.2s;
+
+      &:hover {
+        opacity: 1;
+        background: transparent;
+        color: inherit;
+      }
+    }
+  }
+
+  .clear-all-btn {
+    margin-left: 4px;
+    font-size: 13px;
+    font-weight: 500;
 
     &:hover {
-      background: var(--system-gray3);
-      color: var(--text-secondary);
+      opacity: 0.8;
     }
   }
 }
@@ -1014,8 +1067,33 @@ onMounted(() => {
 
 // Upload Dialog Styles
 .upload-dialog {
+  :deep(.el-dialog) {
+    border-radius: 28px !important;
+    overflow: hidden;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  }
+
+  :deep(.el-overlay-dialog) {
+    border-radius: 28px;
+  }
+
+  :deep(.el-dialog__header) {
+    padding: 24px 24px 16px;
+    margin: 0;
+  }
+
+  :deep(.el-dialog__title) {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
   :deep(.el-dialog__body) {
-    padding: 20px 24px;
+    padding: 16px 24px 24px;
+  }
+
+  :deep(.el-dialog__footer) {
+    padding: 16px 24px 24px;
   }
 
   .upload-dialog-content {
@@ -1027,7 +1105,7 @@ onMounted(() => {
 
 .upload-area {
   border: 2px dashed var(--system-gray4);
-  border-radius: 12px;
+  border-radius: 16px;
   padding: 40px 20px;
   text-align: center;
   cursor: pointer;

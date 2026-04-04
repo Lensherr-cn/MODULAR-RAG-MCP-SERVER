@@ -18,6 +18,7 @@ class Document(Base):
     file_type = Column(String(20), nullable=False, comment="文件类型：pdf/docx/md/txt")
     file_size = Column(Integer, default=0, comment="文件大小（字节）")
     chunk_count = Column(Integer, default=0, comment="片段数量")
+    url = Column(String(500), nullable=True, comment="文件存储路径")
 
     # 数据隔离字段：null表示公共文档，有值表示属于特定用户
     owner_id = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, comment="文档所有者ID，null为公共文档")

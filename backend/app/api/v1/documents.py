@@ -2,14 +2,23 @@
 Documents API - 文档接口
 已接入用户认证和数据隔离
 """
+import os
+import shutil
+from pathlib import Path
 from typing import Optional
 from fastapi import APIRouter, Query, UploadFile, File, Form, Depends, HTTPException, status
+from fastapi.responses import FileResponse
 
 from app.schemas import ApiResponse
 from app.schemas.document import DocumentListResponse, CategoryListResponse
 from app.services.document_service import document_service
 from app.core.auth import get_current_user, require_admin
 from app.models.user import User
+import uuid
+
+# 文件上传目录配置
+UPLOAD_DIR = Path(__file__).resolve().parents[4] / "uploads"
+UPLOAD_DIR.mkdir(exist_ok=True)
 
 router = APIRouter()
 
@@ -42,6 +51,56 @@ async def list_documents(
         code=200,
         data=result,
         message="success"
+    )
+
+
+@router.get("/categories/all", response_model=ApiResponse)
+async def get_categories(
+    current_user: User = Depends(get_current_user)
+):
+    """
+    获取文档分类列表及各分类下的文档数量
+
+    - 返回每个分类及其下的文档数量
+    - 数量根据当前用户的权限计算（公共文档 + 自己的文档 + 同部门文档）
+    """
+    categories = document_service.get_categories(user_id=current_user.id)
+    return ApiResponse(
+        code=200,
+        data={"categories": categories},
+        message="success"
+    )
+
+
+@router.get("/{doc_id}/download")
+async def download_document(
+    doc_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    下载文档
+
+    - 检查用户是否有权限访问该文档
+    - 返回文件流供下载
+    """
+    doc = document_service.get_document(doc_id, user_id=current_user.id)
+    if not doc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found or no permission"
+        )
+
+    file_path = doc.get("url")
+    if not file_path or not os.path.exists(file_path):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="File not found on server"
+        )
+
+    return FileResponse(
+        path=file_path,
+        filename=doc["name"],
+        media_type="application/octet-stream"
     )
 
 
@@ -85,6 +144,7 @@ async def upload_document(
     - 可设置可见性级别
     - department字段自动设置为当前用户的部门
     - chunk_count和content字段为空，由后续功能更新
+    - 文件保存到本地uploads目录，路径存入url字段
     """
     # 验证可见性参数
     if visibility not in ["public", "department", "private"]:
@@ -117,6 +177,22 @@ async def upload_document(
             message=f"Unsupported file type: {file_type}. Supported: {', '.join(supported_types)}"
         )
 
+    # 生成文件保存路径
+    doc_id = str(uuid.uuid4())
+    safe_filename = f"{doc_id}_{file.filename}"
+    file_path = UPLOAD_DIR / safe_filename
+
+    # 保存文件到本地
+    try:
+        with open(file_path, "wb") as f:
+            f.write(content)
+    except Exception as e:
+        return ApiResponse(
+            code=500,
+            data=None,
+            message=f"Failed to save file: {str(e)}"
+        )
+
     # 创建文档记录（不解析内容，chunk_count和content留空，由其他功能后续更新）
     doc_data = {
         "name": file.filename,
@@ -125,6 +201,7 @@ async def upload_document(
         "category": category,
         "visibility": visibility,
         "department": current_user.department,  # 使用当前用户的部门
+        "url": str(file_path),  # 文件存储路径
         "raw_content": None  # 不传递二进制内容，避免解析
     }
 
@@ -142,6 +219,7 @@ async def upload_document(
             "chunk_count": 0,  # 初始为0，后续由其他功能更新
             "visibility": visibility,
             "department": current_user.department,
+            "url": str(file_path),  # 返回文件路径
             "created_at": doc["created_at"],
             "updated_at": doc["updated_at"],
             "metadata": doc.get("metadata", {}),
@@ -173,21 +251,3 @@ async def delete_document(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Document not found or no permission to delete"
         )
-
-
-@router.get("/categories/all", response_model=ApiResponse)
-async def get_categories(
-    current_user: User = Depends(get_current_user)
-):
-    """
-    获取文档分类列表及各分类下的文档数量
-
-    - 返回每个分类及其下的文档数量
-    - 数量根据当前用户的权限计算（公共文档 + 自己的文档 + 同部门文档）
-    """
-    categories = document_service.get_categories(user_id=current_user.id)
-    return ApiResponse(
-        code=200,
-        data={"categories": categories},
-        message="success"
-    )

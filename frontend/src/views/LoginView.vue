@@ -166,7 +166,7 @@ const handleLogin = async () => {
     })
 
     if (result.success) {
-      await router.replace('/')
+      await router.replace('/home')
     } else {
       errorMessage.value = result.message || 'Authentication failed'
       triggerShake()
