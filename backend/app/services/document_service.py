@@ -58,9 +58,13 @@ class DocumentService:
 
             # 数据隔离：只查询用户有权限看到的文档
             if user_id:
-                # 用户能看到：公共文档 + 自己的文档 + 同部门的文档
+                # 检查用户是否是管理员
                 user = db.query(User).filter(User.id == user_id).first()
-                if user:
+                if user and user.role == "admin":
+                    # 管理员可以看到所有文档
+                    pass
+                elif user:
+                    # 普通用户能看到：公共文档 + 自己的文档 + 同部门的文档
                     query = query.filter(
                         or_(
                             Document.visibility == "public",
@@ -244,9 +248,13 @@ class DocumentService:
                 query = db.query(Document).filter(Document.category == cat.name)
 
                 if user_id:
-                    # 用户能看到：公共文档 + 自己的文档 + 同部门的文档
+                    # 检查用户是否是管理员
                     user = db.query(User).filter(User.id == user_id).first()
-                    if user:
+                    if user and user.role == "admin":
+                        # 管理员可以看到所有文档
+                        pass
+                    elif user:
+                        # 普通用户能看到：公共文档 + 自己的文档 + 同部门的文档
                         query = query.filter(
                             or_(
                                 Document.visibility == "public",
@@ -298,6 +306,7 @@ class DocumentService:
             "file_size": doc.file_size,
             "chunk_count": doc.chunk_count,
             "url": doc.url,
+            "visibility": doc.visibility,
             "created_at": doc.created_at.isoformat() if doc.created_at else None,
             "updated_at": doc.updated_at.isoformat() if doc.updated_at else None,
         }
@@ -321,6 +330,12 @@ class DocumentService:
 
     def _can_access_document(self, doc: Document, user_id: Optional[str], db: Session) -> bool:
         """检查用户是否有权限访问文档"""
+        # 管理员可以访问所有文档
+        if user_id:
+            user = db.query(User).filter(User.id == user_id).first()
+            if user and user.role == "admin":
+                return True
+
         # 公共文档所有人可访问
         if doc.visibility == "public":
             return True

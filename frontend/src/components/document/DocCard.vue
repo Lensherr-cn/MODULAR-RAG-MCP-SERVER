@@ -11,6 +11,12 @@
         <div class="file-meta">
           <span class="file-category">{{ document.category }}</span>
           <span class="file-size">{{ formatFileSize(document.file_size) }}</span>
+          <span v-if="document.visibility" class="visibility-badge" :class="document.visibility">
+            <el-icon :size="12">
+              <component :is="visibilityIcon" />
+            </el-icon>
+            {{ visibilityLabel }}
+          </span>
         </div>
       </div>
     </div>
@@ -65,7 +71,10 @@ import {
   StarFilled,
   Collection,
   Clock,
-  Delete
+  Delete,
+  View as IconView,
+  OfficeBuilding,
+  Lock
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import type { Document as DocType } from '@/api/document'
@@ -116,6 +125,24 @@ const fileIconClass = computed(() => {
     md: 'gray'
   }
   return classes[props.document.file_type] || 'gray'
+})
+
+const visibilityIcon = computed(() => {
+  const icons: Record<string, any> = {
+    public: IconView,
+    department: OfficeBuilding,
+    private: Lock
+  }
+  return icons[props.document.visibility] || IconView
+})
+
+const visibilityLabel = computed(() => {
+  const labels: Record<string, string> = {
+    public: '公共',
+    department: '部门',
+    private: '私有'
+  }
+  return labels[props.document.visibility] || ''
 })
 
 const formatFileSize = (bytes: number) => {
@@ -249,6 +276,31 @@ const handleDelete = () => {
         padding: 2px 8px;
         background: var(--apple-bg-tertiary);
         border-radius: 4px;
+      }
+
+      .visibility-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: 500;
+
+        &.public {
+          background: rgba(52, 199, 89, 0.1);
+          color: #34c759;
+        }
+
+        &.department {
+          background: rgba(0, 122, 255, 0.1);
+          color: #007aff;
+        }
+
+        &.private {
+          background: rgba(255, 59, 48, 0.1);
+          color: #ff3b30;
+        }
       }
     }
   }

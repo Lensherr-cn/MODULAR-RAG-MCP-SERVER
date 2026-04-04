@@ -9,6 +9,7 @@ export interface Document {
   file_size: number
   chunk_count: number
   url?: string
+  visibility?: 'public' | 'department' | 'private'
   created_at: string
   updated_at: string
 }
