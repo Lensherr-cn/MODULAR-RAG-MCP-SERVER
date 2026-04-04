@@ -126,8 +126,14 @@ class DocumentService:
         finally:
             db.close()
 
-    def create_document(self, doc_data: Dict[str, Any], user_id: Optional[str] = None) -> Dict[str, Any]:
-        """创建文档（支持解析内容）"""
+    def create_document(self, doc_data: Dict[str, Any], user_id: Optional[str] = None, parse: bool = True) -> Dict[str, Any]:
+        """创建文档
+
+        Args:
+            doc_data: 文档数据
+            user_id: 用户ID
+            parse: 是否解析文档内容，默认为True。为False时只保存文件记录，不解析内容和生成chunks
+        """
         db = self._get_db()
         try:
             doc_id = str(uuid.uuid4())
@@ -147,7 +153,7 @@ class DocumentService:
                 file_type=file_type,
                 file_size=doc_data.get("file_size", 0),
                 chunk_count=0,
-                owner_id=user_id,  # 上传者成为所有者
+                owner_id=user_id,
                 visibility=doc_data.get("visibility", "public"),
                 department=doc_data.get("department"),
                 content="",
@@ -155,8 +161,8 @@ class DocumentService:
                 updated_at=now
             )
 
-            # 如果提供了二进制内容，解析文档
-            if raw_content and isinstance(raw_content, bytes):
+            # 如果提供了二进制内容且需要解析，则解析文档
+            if parse and raw_content and isinstance(raw_content, bytes):
                 try:
                     parse_result = document_parser.parse_document(
                         content=raw_content,

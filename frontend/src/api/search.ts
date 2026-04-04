@@ -17,7 +17,7 @@ export interface SearchResponse {
 
 // 全局搜索
 export function searchApi(keyword: string, params?: { type?: string; limit?: number }) {
-  return get<SearchResponse>('/search', {
+  return get<SearchResponse>('/v1/search', {
     params: {
       keyword,
       ...params,

@@ -23,12 +23,12 @@ export interface HotQuestion {
 
 // 获取首页统计数据
 export function getOverviewStatsApi() {
-  return get<OverviewStats>('/stats/overview')
+  return get<OverviewStats>('/v1/stats/overview')
 }
 
 // 获取热门问题
 export function getHotQuestionsApi(limit?: number) {
-  return get<HotQuestion[]>('/stats/hot-questions', {
+  return get<HotQuestion[]>('/v1/stats/hot-questions', {
     params: { limit },
   })
 }

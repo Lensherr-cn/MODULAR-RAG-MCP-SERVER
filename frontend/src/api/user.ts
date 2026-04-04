@@ -33,27 +33,27 @@ export interface Feedback {
 
 // 获取用户信息
 export function getUserProfileApi() {
-  return get<UserProfile>('/user/profile')
+  return get<UserProfile>('/v1/user/profile')
 }
 
 // 获取查询历史
 export function getQueryHistoryApi(params?: { limit?: number }) {
-  return get<QueryHistory[]>('/user/history', { params })
+  return get<QueryHistory[]>('/v1/user/history', { params })
 }
 
 // 获取收藏列表
 export function getFavoritesApi() {
-  return get<Favorite[]>('/user/favorites')
+  return get<Favorite[]>('/v1/user/favorites')
 }
 
 // 添加/取消收藏
 export function toggleFavoriteApi(documentId: string) {
-  return post(`/user/favorites/${documentId}`)
+  return post(`/v1/user/favorites/${documentId}`)
 }
 
 // 删除收藏
 export function deleteFavoriteApi(id: string) {
-  return del(`/user/favorites/${id}`)
+  return del(`/v1/user/favorites/${id}`)
 }
 
 // 提交反馈
@@ -64,10 +64,10 @@ export interface FeedbackRequest {
 }
 
 export function submitFeedbackApi(data: FeedbackRequest) {
-  return post('/feedback', data)
+  return post('/v1/feedback', data)
 }
 
 // 获取反馈列表
 export function getFeedbacksApi() {
-  return get<Feedback[]>('/feedback')
+  return get<Feedback[]>('/v1/feedback')
 }

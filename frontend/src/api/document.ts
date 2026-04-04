@@ -44,17 +44,17 @@ export function getDocumentsApi(params?: {
   keyword?: string
   file_type?: string
 }) {
-  return get<DocumentListResponse>('/documents', { params })
+  return get<DocumentListResponse>('/v1/documents', { params })
 }
 
 // 获取文档详情
 export function getDocumentDetailApi(id: string) {
-  return get<DocumentDetail>(`/documents/${id}`)
+  return get<DocumentDetail>(`/v1/documents/${id}`)
 }
 
 // 上传文档
 export function uploadDocumentApi(formData: FormData) {
-  return post<{ id: string }>('/documents/upload', formData, {
+  return post<{ id: string }>('/v1/documents/upload', formData, {
     headers: {
       'Content-Type': 'multipart/form-data',
     },
@@ -63,10 +63,10 @@ export function uploadDocumentApi(formData: FormData) {
 
 // 删除文档
 export function deleteDocumentApi(id: string) {
-  return del(`/documents/${id}`)
+  return del(`/v1/documents/${id}`)
 }
 
 // 获取分类列表
 export function getCategoriesApi() {
-  return get<Category[]>('/categories')
+  return get<Category[]>('/v1/categories')
 }

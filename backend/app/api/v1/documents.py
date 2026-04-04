@@ -3,7 +3,7 @@ Documents API - 文档接口
 已接入用户认证和数据隔离
 """
 from typing import Optional
-from fastapi import APIRouter, Query, UploadFile, File, Depends, HTTPException, status
+from fastapi import APIRouter, Query, UploadFile, File, Form, Depends, HTTPException, status
 
 from app.schemas import ApiResponse
 from app.schemas.document import DocumentListResponse, CategoryListResponse
@@ -72,18 +72,19 @@ async def get_document(
 @router.post("/upload", response_model=ApiResponse)
 async def upload_document(
     file: UploadFile = File(...),
-    category: Optional[str] = Query(None, description="文档分类"),
-    visibility: Optional[str] = Query("public", description="可见性: public/department/private"),
+    category: Optional[str] = Form(None, description="文档分类"),
+    visibility: Optional[str] = Form("public", description="可见性: public/department/private"),
     current_user: User = Depends(get_current_user)
 ):
     """
     上传文档
 
     支持格式：PDF、Word(docx)、Markdown、TXT
-    文档内容会被自动解析和分块
 
     - 上传的文档归属当前用户
     - 可设置可见性级别
+    - department字段自动设置为当前用户的部门
+    - chunk_count和content字段为空，由后续功能更新
     """
     # 验证可见性参数
     if visibility not in ["public", "department", "private"]:
@@ -116,18 +117,19 @@ async def upload_document(
             message=f"Unsupported file type: {file_type}. Supported: {', '.join(supported_types)}"
         )
 
-    # 创建文档记录（会自动解析内容）
+    # 创建文档记录（不解析内容，chunk_count和content留空，由其他功能后续更新）
     doc_data = {
         "name": file.filename,
         "file_type": file_type,
         "file_size": len(content),
         "category": category,
         "visibility": visibility,
-        "department": current_user.department if visibility == "department" else None,
-        "raw_content": content  # 传递二进制内容给解析器
+        "department": current_user.department,  # 使用当前用户的部门
+        "raw_content": None  # 不传递二进制内容，避免解析
     }
 
-    doc = document_service.create_document(doc_data, user_id=current_user.id)
+    # parse=False 表示只保存文件记录，不解析内容和生成chunks
+    doc = document_service.create_document(doc_data, user_id=current_user.id, parse=False)
 
     return ApiResponse(
         code=200,
@@ -137,13 +139,15 @@ async def upload_document(
             "category": doc["category"],
             "file_type": doc["file_type"],
             "file_size": doc["file_size"],
-            "chunk_count": doc["chunk_count"],
+            "chunk_count": 0,  # 初始为0，后续由其他功能更新
             "visibility": visibility,
+            "department": current_user.department,
             "created_at": doc["created_at"],
+            "updated_at": doc["updated_at"],
             "metadata": doc.get("metadata", {}),
-            "preview": doc["content"][:500] if doc["content"] else ""
+            "preview": ""  # content为空，预览为空
         },
-        message="Document uploaded and parsed successfully"
+        message="Document uploaded successfully"
     )
 
 

@@ -26,12 +26,12 @@ export interface ChatResponse {
 
 // 智能问答
 export function chatApi(data: ChatRequest) {
-  return post<ChatResponse>('/chat', data)
+  return post<ChatResponse>('/v1/chat', data)
 }
 
 // 获取对话历史
 export function getChatHistoryApi(conversation_id?: string) {
-  return get<ChatResponse[]>(`/chat/history${conversation_id ? `?conversation_id=${conversation_id}` : ''}`)
+  return get<ChatResponse[]>(`/v1/chat/history${conversation_id ? `?conversation_id=${conversation_id}` : ''}`)
 }
 
 // 流式问答（使用 EventSource）
