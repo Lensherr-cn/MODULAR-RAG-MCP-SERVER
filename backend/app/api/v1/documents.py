@@ -19,6 +19,7 @@ import uuid
 # 文件上传目录配置
 UPLOAD_DIR = Path(__file__).resolve().parents[4] / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
+project_root = Path(__file__).resolve().parents[4]
 
 router = APIRouter()
 
@@ -363,6 +364,7 @@ async def parse_document(
     # 2. 创建解析任务（异步处理）
     # 3. 或者同步解析并返回结果
 
+    # first 检查文档是否存在且用户有权限访问
     doc = document_service.get_document(doc_id, user_id=current_user.id)
     if not doc:
         raise HTTPException(
@@ -370,13 +372,96 @@ async def parse_document(
             detail="Document not found or no permission"
         )
 
-    # Placeholder for actual parsing logic
-    return ApiResponse(
-        code=200,
-        data={
-            "doc_id": doc_id,
-            "status": "pending",
-            "message": "Document parsing started"
-        },
-        message="Document parsing initiated"
-    )
+    # second 创建解析任务
+    print("=" * 60)
+    print("Starting PDF Ingestion")
+    print("=" * 60)
+
+    # 要解析的文档路径
+    pdf_path = Path(doc["url"]) if isinstance(doc["url"], str) else doc["url"]
+    if not pdf_path:
+        print(f"ERROR: No PDF files found in {UPLOAD_DIR}")
+        return False
+
+    print(f"Found {doc['name']} PDF file:")
+
+    # 加载配置
+    from src.core.settings import load_settings
+    try:
+        settings = load_settings(project_root / "config" / "settings.yaml")
+        print(f"\nSettings loaded successfully")
+        print(f"  - Collection: {settings.vector_store.collection_name}")
+    except Exception as e:
+        print(f"ERROR loading settings: {e}")
+        return False
+
+    # 初始化管道
+    from src.ingestion.pipeline import IngestionPipeline
+    try:
+        pipeline = IngestionPipeline(
+            settings=settings,
+            collection="knowledge-hub",
+            force=True
+        )
+        print("Pipeline initialized successfully")
+    except Exception as e:
+        print(f"ERROR initializing pipeline: {e}")
+        return False
+
+    # 解析文档
+    results = []
+    from src.core.trace import TraceContext
+    try:
+        trace = TraceContext(trace_type="ingestion")
+        trace.metadata["source_path"] = str(pdf_path)
+        result = pipeline.run(str(pdf_path), trace=trace)
+        results.append((pdf_path.name, result))
+
+        if result.success:
+            print(f"  SUCCESS: {result.chunk_count} chunks, {result.image_count} images")
+        else:
+            print(f"  FAILED: {result.error}")
+    except Exception as e:
+        print(f"  ERROR: {e}")
+        results.append((pdf_path.name, None))
+
+
+    # 处理情况摘要
+    print("\n" + "=" * 60)
+    print("INGESTION SUMMARY")
+    print("=" * 60)
+
+    successful = sum(1 for _, r in results if r and r.success)
+    total_chunks = sum(r.chunk_count for _, r in results if r and r.success)
+
+    print(f"Total files: {len(results)}")
+    print(f"Successful: {successful}")
+    print(f"Failed: {len(results) - successful}")
+    print(f"Total chunks: {total_chunks}")
+
+
+    if successful == len(results):
+        print("\nPDF Ingestion SUCCESS")
+        return ApiResponse(
+            code=200,
+            data={
+                "doc_id": doc_id,
+                "status": "pending",
+                "message": "Document parsing started"
+            },
+            message="Document parsing initiated"
+        )
+    else:
+        print("\nPDF Ingestion PARTIAL FAILURE")
+        return ApiResponse(
+            code=500,
+            data={
+                "doc_id": doc_id,
+                "status": "pending",
+                "message": "Document parsing failed"
+            },
+            message="Document parsing failed"
+        )
+
+
+

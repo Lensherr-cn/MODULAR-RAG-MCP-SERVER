@@ -220,21 +220,24 @@ const handleParse = async () => {
   if (isParsing.value) return
   isParsing.value = true
 
+  // Immediately emit parse event to parent (before API call)
+  emit('parse', props.document)
+
   try {
     const { data } = await parseDocumentApi(props.document.id)
     if (data.code === 200) {
-      ElMessage.success('文档解析任务已启动')
-      emit('parse', props.document)
+      ElMessage.success('文档解析任务已完成')
+      // Reset after animation
+      setTimeout(() => {
+        isParsing.value = false
+      }, 1500)
     } else {
       ElMessage.error(data.message || '解析失败')
+      isParsing.value = false
     }
   } catch (error: any) {
     ElMessage.error(error.response?.data?.detail || '解析请求失败')
-  } finally {
-    // Reset after animation
-    setTimeout(() => {
-      isParsing.value = false
-    }, 1500)
+    isParsing.value = false
   }
 }
 </script>

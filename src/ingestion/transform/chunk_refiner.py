@@ -36,15 +36,15 @@ class ChunkRefiner(BaseTransform):
         - Atomic Processing: Each chunk processed independently
         - Observable: Records refined_by in metadata
     """
-    
+
     def __init__(
-        self,
-        settings: Settings,
-        llm: Optional[BaseLLM] = None,
-        prompt_path: Optional[str] = None
+            self,
+            settings: Settings,
+            llm: Optional[BaseLLM] = None,
+            prompt_path: Optional[str] = None
     ):
         """Initialize ChunkRefiner.
-        
+
         Args:
             settings: Application settings
             llm: Optional LLM instance (for testing; auto-created if None)
@@ -54,21 +54,35 @@ class ChunkRefiner(BaseTransform):
         self._llm = llm
         self._prompt_template: Optional[str] = None
         self._prompt_path = prompt_path or str(resolve_path("config/prompts/chunk_refinement.txt"))
-        
-        # Determine if LLM should be used
-        self.use_llm = getattr(
-            getattr(settings, 'ingestion', None), 
-            'chunk_refiner', 
-            {}
-        ).get('use_llm', False) if hasattr(settings, 'ingestion') else False
-        
+
+        # --- 修复开始：直接访问 dataclass 字段 ---
+        self.use_llm = True
+        # 在第 59 行后加：
+
+
+        # 在第 62 行加：
+
+        ingestion_cfg = getattr(settings, 'ingestion', None)
+        if ingestion_cfg:
+            refiner_dict = ingestion_cfg.chunk_refiner
+
+            print(f"[DEBUG 1] refiner_dict id: {id(refiner_dict)}, content: {refiner_dict}")
+            print(f"[DEBUG 2] refiner_dict['use_llm'] type: {type(refiner_dict.get('use_llm'))}")
+            print(f"[DEBUG 3] refiner_dict['use_llm'] value: {refiner_dict.get('use_llm')}")
+
+            # 强制转换并赋值
+            raw_val = refiner_dict.get('use_llm', False)
+            self.use_llm = False if raw_val is False else True
+
+            print(f"[DEBUG 4] self.use_llm after assignment: {self.use_llm} (type: {type(self.use_llm)})")
+
+
     @property
     def llm(self) -> Optional[BaseLLM]:
         """Lazy-load LLM instance."""
         if self.use_llm and self._llm is None:
             try:
                 self._llm = LLMFactory.create(self.settings)
-                logger.info("LLM initialized for chunk refinement")
             except Exception as e:
                 logger.warning(f"Failed to initialize LLM: {e}. Falling back to rule-based only.")
                 self.use_llm = False

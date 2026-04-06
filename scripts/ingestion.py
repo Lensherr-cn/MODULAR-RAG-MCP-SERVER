@@ -27,7 +27,7 @@ def test_pdf_ingestion():
     print("=" * 60)
 
     # Check for PDF files
-    docs_dir = project_root / "data" / "documents"
+    docs_dir = project_root / "uploads"
     pdf_files = list(docs_dir.glob("*.pdf")) + list(docs_dir.glob("*.PDF"))
 
     if not pdf_files:

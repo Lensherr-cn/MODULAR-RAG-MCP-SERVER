@@ -74,7 +74,7 @@ class QwenLLM(BaseLLM):
         self.default_max_tokens = llm_settings.max_tokens
 
         # API key: explicit > env var > config
-        self.api_key = api_key or os.getenv("QWEN_API_KEY")
+        self.api_key = api_key or os.getenv("QWEN_API_KEY") or settings.llm.api_key
         if not self.api_key:
             raise ValueError(
                 "Qwen API key not provided. Set QWEN_API_KEY environment variable "

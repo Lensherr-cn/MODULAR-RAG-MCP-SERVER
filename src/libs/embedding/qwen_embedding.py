@@ -61,10 +61,12 @@ class QwenEmbedding(BaseEmbedding):
         # Extract optional dimensions setting
         self.dimensions = getattr(settings.embedding, 'dimensions', None)
 
-        # API key: explicit > settings > env var
+        # API key: explicit > env var > settings
+        settings_api_key = getattr(settings.embedding, 'api_key', None) if hasattr(settings, 'embedding') else None
         self.api_key = (
                 api_key
                 or os.environ.get("QWEN_API_KEY")
+                or settings_api_key
         )
         if not self.api_key:
             raise ValueError(
@@ -122,53 +124,63 @@ class QwenEmbedding(BaseEmbedding):
             "Content-Type": "application/json",
         }
 
-        payload = {
-            "input": texts,
-            "model": self.model,
-        }
-
         # Add dimensions if specified
         dimensions = kwargs.get("dimensions", self.dimensions)
-        if dimensions is not None:
-            payload["dimensions"] = dimensions
 
-        # Make API call
-        try:
-            with httpx.Client(timeout=60.0) as client:
-                response = client.post(url, json=payload, headers=headers)
+        all_embeddings = []
+        batch_size = 10  # DashScope limit
 
-                if response.status_code != 200:
-                    error_detail = self._parse_error_response(response)
-                    raise QwenEmbeddingError(
-                        f"[Qwen] API error (HTTP {response.status_code}): {error_detail}"
-                    )
+        # Process in batches to avoid "batch size is invalid" error
+        for i in range(0, len(texts), batch_size):
+            batch_texts = texts[i:i + batch_size]
 
-                response_data = response.json()
-        except httpx.TimeoutException as e:
-            raise QwenEmbeddingError(
-                f"[Qwen] Request timed out after 60 seconds"
-            ) from e
-        except httpx.RequestError as e:
-            raise QwenEmbeddingError(
-                f"[Qwen] Connection failed: {type(e).__name__}: {e}"
-            ) from e
+            payload = {
+                "input": batch_texts,
+                "model": self.model,
+            }
 
-        # Extract embeddings from response
-        # Response format: {"data": [{"embedding": [...], "index": 0}, ...], "usage": {...}}
-        try:
-            embeddings = [item["embedding"] for item in response_data.get("data", [])]
-        except (KeyError, TypeError) as e:
-            raise QwenEmbeddingError(
-                f"[Qwen] Failed to parse API response: {e}"
-            ) from e
+            if dimensions is not None:
+                payload["dimensions"] = dimensions
+
+            # Make API call
+            try:
+                with httpx.Client(timeout=60.0) as client:
+                    response = client.post(url, json=payload, headers=headers)
+
+                    if response.status_code != 200:
+                        error_detail = self._parse_error_response(response)
+                        print(error_detail)
+                        raise QwenEmbeddingError(
+                            f"[Qwen] API error (HTTP {response.status_code}): {error_detail}"
+                        )
+
+                    response_data = response.json()
+            except httpx.TimeoutException as e:
+                raise QwenEmbeddingError(
+                    f"[Qwen] Request timed out after 60 seconds"
+                ) from e
+            except httpx.RequestError as e:
+                raise QwenEmbeddingError(
+                    f"[Qwen] Connection failed: {type(e).__name__}: {e}"
+                ) from e
+
+            # Extract embeddings from response
+            try:
+                batch_embeddings = [item["embedding"] for item in response_data.get("data", [])]
+            except (KeyError, TypeError) as e:
+                raise QwenEmbeddingError(
+                    f"[Qwen] Failed to parse API response: {e}"
+                ) from e
+
+            all_embeddings.extend(batch_embeddings)
 
         # Verify output matches input length
-        if len(embeddings) != len(texts):
+        if len(all_embeddings) != len(texts):
             raise QwenEmbeddingError(
-                f"[Qwen] Output length mismatch: expected {len(texts)}, got {len(embeddings)}"
+                f"[Qwen] Output length mismatch: expected {len(texts)}, got {len(all_embeddings)}"
             )
 
-        return embeddings
+        return all_embeddings
 
     def _parse_error_response(self, response: Any) -> str:
         """Parse error details from API response.

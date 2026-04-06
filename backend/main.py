@@ -3,7 +3,11 @@ Backend Entry Point
 可以直接运行: python main.py
 """
 import sys
+import warnings
 from pathlib import Path
+
+# 忽略 jieba 的 SyntaxWarning 警告
+warnings.filterwarnings("ignore", category=SyntaxWarning, module="jieba")
 
 # 确保可以导入app
 backend_dir = Path(__file__).parent
