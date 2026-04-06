@@ -33,6 +33,6 @@ async def get_hot_questions(
     questions = stats_service.get_hot_questions(limit=limit)
     return ApiResponse(
         code=200,
-        data=questions,
+        data={"questions": questions},
         message="success"
     )

@@ -17,6 +17,9 @@ from src.libs.llm.openai_vision_llm import OpenAIVisionLLM, OpenAIVisionLLMError
 from src.libs.llm.azure_llm import AzureLLM, AzureLLMError
 from src.libs.llm.deepseek_llm import DeepSeekLLM, DeepSeekLLMError
 from src.libs.llm.ollama_llm import OllamaLLM, OllamaLLMError
+from src.libs.llm.qwen_vision_llm import QwenVisionLLM, QwenVisionLLMError
+
+
 
 # Register text-only LLM providers with factory
 LLMFactory.register_provider("openai", OpenAILLM)
@@ -54,4 +57,6 @@ __all__ = [
     # Vision LLM implementations
     "OpenAIVisionLLM",
     "OpenAIVisionLLMError",
+    "QwenVisionLLM",
+    "QwenVisionLLMError",
 ]
