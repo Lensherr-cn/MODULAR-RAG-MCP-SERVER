@@ -104,7 +104,7 @@ import {
 import ChatMessage from '@/components/chat/ChatMessage.vue'
 import ChatInput from '@/components/chat/ChatInput.vue'
 import { useChatStore } from '@/stores/chat'
-import { chatApi, createChatStream } from '@/api/chat'
+import { chatApi, createChatStream, getRecentConversationsApi } from '@/api/chat'
 import { ElMessage } from 'element-plus'
 
 const route = useRoute()
@@ -223,7 +223,23 @@ const handleClear = () => {
   ElMessage.success('对话已清空')
 }
 
+// 加载最近对话历史
+const loadRecentConversations = async () => {
+  try {
+    const { data } = await getRecentConversationsApi()
+    if (data.data && data.data.conversations) {
+      chatStore.loadRecentConversations(data.data.conversations)
+    }
+  } catch (error) {
+    console.error('Failed to load recent conversations:', error)
+    // 加载失败不影响用户正常使用，静默处理
+  }
+}
+
 onMounted(() => {
+  // 优先加载最近对话历史
+  loadRecentConversations()
+
   const q = route.query.q as string
   if (q) {
     inputText.value = q

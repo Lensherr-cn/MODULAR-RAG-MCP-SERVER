@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import type { RecentConversation, RecentMessage } from '@/api/chat'
 
 export const useChatStore = defineStore('chat', () => {
   // 当前对话 ID
@@ -13,6 +14,9 @@ export const useChatStore = defineStore('chat', () => {
     related_questions?: string[]
     timestamp: number
   }>>([])
+
+  // 最近对话列表（用于侧边栏或历史记录）
+  const recentConversations = ref<RecentConversation[]>([])
 
   // 是否正在加载
   const isLoading = ref(false)
@@ -56,14 +60,83 @@ export const useChatStore = defineStore('chat', () => {
     conversationId.value = undefined
   }
 
+  // 加载最近对话历史到当前消息列表（页面初始加载时调用）
+  function loadRecentConversations(conversations: RecentConversation[]) {
+    recentConversations.value = conversations
+
+    // 清空当前消息列表
+    messages.value = []
+
+    // 如果有对话，加载最新的一个对话的消息（用于 RAG 上下文）
+    // 注意：只加载最近 5 轮（10 条消息），满足 rag_service.py 中最多 3 轮（6 条）的需求
+    if (conversations.length > 0) {
+      const latestConv = conversations[0]
+      if (latestConv.messages && latestConv.messages.length > 0) {
+        // 取最近 5 轮对话（最多 10 条消息）
+        const recentMessages = latestConv.messages.slice(-10)
+
+        for (const msg of recentMessages) {
+          if (msg.role === 'user') {
+            messages.value.push({
+              role: 'user',
+              content: msg.content,
+              timestamp: new Date(msg.created_at || Date.now()).getTime()
+            })
+          } else {
+            messages.value.push({
+              role: 'assistant',
+              content: msg.content,
+              sources: msg.sources,
+              timestamp: new Date(msg.created_at || Date.now()).getTime()
+            })
+          }
+        }
+
+        // 设置当前对话 ID 为最新的对话
+        conversationId.value = latestConv.id
+      }
+    }
+  }
+
+  // 切换到指定对话
+  function switchConversation(conv: RecentConversation) {
+    conversationId.value = conv.id
+    messages.value = []
+
+    if (conv.messages && conv.messages.length > 0) {
+      // 取最近 5 轮对话（最多 10 条消息）
+      const recentMessages = conv.messages.slice(-10)
+
+      for (const msg of recentMessages) {
+        if (msg.role === 'user') {
+          messages.value.push({
+            role: 'user',
+            content: msg.content,
+            timestamp: new Date(msg.created_at || Date.now()).getTime()
+          })
+        } else {
+          messages.value.push({
+            role: 'assistant',
+            content: msg.content,
+            sources: msg.sources,
+            timestamp: new Date(msg.created_at || Date.now()).getTime()
+          })
+        }
+      }
+    }
+  }
+
   return {
     conversationId,
     messages,
+    recentConversations,
     isLoading,
     setConversationId,
     addUserMessage,
     addAssistantMessage,
     updateLastAssistantMessage,
-    clearMessages
+    clearMessages,
+    loadRecentConversations,
+    switchConversation
   }
 })

@@ -111,6 +111,70 @@ async def chat_debug(request: Request):
     )
 
 
+@router.get("/recent", response_model=ApiResponse)
+async def get_recent_conversations(
+    current_user: User = Depends(get_current_user)
+):
+    """
+    获取最近 5 轮对话（用于页面初始加载）
+
+    返回最近更新过的 5 个对话及其消息，按 updated_at 降序排列
+    """
+    from sqlalchemy import desc
+    from app.core.database import SessionLocal
+    from app.models.chat import Conversation, ChatMessage
+    import json
+
+    db = SessionLocal()
+    try:
+        # 获取当前用户最近更新的 5 个对话
+        query = db.query(Conversation).filter(
+            Conversation.is_active == "Y",
+            Conversation.user_id == current_user.id,
+            Conversation.message_count > 0
+        ).order_by(desc(Conversation.updated_at)).limit(5)
+
+        conversations = query.all()
+
+        result = []
+        for conv in conversations:
+            # 获取该对话的所有消息（按 message_index 排序）
+            messages = db.query(ChatMessage).filter(
+                ChatMessage.conversation_id == conv.id
+            ).order_by(ChatMessage.message_index).all()
+
+            message_list = [
+                {
+                    "id": msg.id,
+                    "role": msg.role,
+                    "content": msg.content,
+                    "sources": json.loads(msg.sources_json) if msg.sources_json else None,
+                    "created_at": msg.created_at.isoformat() if msg.created_at else None
+                }
+                for msg in messages
+            ]
+
+            result.append({
+                "id": conv.id,
+                "title": conv.title,
+                "message_count": conv.message_count,
+                "created_at": conv.created_at.isoformat() if conv.created_at else None,
+                "updated_at": conv.updated_at.isoformat() if conv.updated_at else None,
+                "messages": message_list
+            })
+
+        return ApiResponse(
+            code=200,
+            data={
+                "conversations": result,
+                "total": len(result)
+            },
+            message="success"
+        )
+    finally:
+        db.close()
+
+
 @router.get("/history", response_model=ApiResponse)
 async def get_chat_history(
     conversation_id: Optional[str] = Query(None),

@@ -34,6 +34,34 @@ export function getChatHistoryApi(conversation_id?: string) {
   return get<ChatResponse[]>(`/v1/chat/history${conversation_id ? `?conversation_id=${conversation_id}` : ''}`)
 }
 
+// 最近对话消息（用于页面初始加载）
+export interface RecentMessage {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+  sources?: any[]
+  created_at?: string
+}
+
+export interface RecentConversation {
+  id: string
+  title: string
+  message_count: number
+  created_at?: string
+  updated_at?: string
+  messages: RecentMessage[]
+}
+
+export interface RecentConversationsResponse {
+  conversations: RecentConversation[]
+  total: number
+}
+
+// 获取最近 5 轮对话
+export function getRecentConversationsApi() {
+  return get<RecentConversationsResponse>('/v1/chat/recent')
+}
+
 // 流式问答（使用 fetch + ReadableStream，支持 Cookie）
 export async function createChatStream(
   data: ChatRequest,
