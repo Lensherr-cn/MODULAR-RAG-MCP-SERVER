@@ -94,7 +94,20 @@ class VectorStoreFactory:
         # Instantiate the provider
         # Provider classes should accept settings and optional kwargs
         try:
-            return provider_class(settings=settings, **override_kwargs)
+            instance = provider_class(settings=settings, **override_kwargs)
+            # ✅ 打印 ChromaStore 数据量（一定会执行）
+            if hasattr(instance, 'collection'):
+                count = instance.collection.count()
+                print(f"\n{'=' * 60}")
+                print(f"[VectorStoreFactory] ChromaDB 初始化成功")
+                print(f"  - Collection: {instance.collection_name}")
+                print(f"  - Persist Dir: {instance.persist_directory}")
+                print(f"  - 📊 数据总量: {count} 条记录")
+                if count == 0:
+                    print(f"  - ⚠️  警告: 数据库是空的！请先运行文档摄入流程")
+                print(f"{'=' * 60}\n")
+
+            return instance
         except Exception as e:
             raise RuntimeError(
                 f"Failed to instantiate VectorStore provider '{provider_name}': {e}"

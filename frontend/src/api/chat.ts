@@ -34,39 +34,94 @@ export function getChatHistoryApi(conversation_id?: string) {
   return get<ChatResponse[]>(`/v1/chat/history${conversation_id ? `?conversation_id=${conversation_id}` : ''}`)
 }
 
-// 流式问答（使用 EventSource）
-export function createChatStream(
+// 流式问答（使用 fetch + ReadableStream，支持 Cookie）
+export async function createChatStream(
   data: ChatRequest,
   onMessage: (data: any) => void,
   onError?: (error: any) => void,
   onDone?: () => void
-) {
-  const token = localStorage.getItem('token')
+): Promise<() => void> {
   const baseUrl = import.meta.env.VITE_API_BASE_URL || '/api'
-  // 移除 baseUrl 末尾的 /v1（如果存在），然后添加 /v1/chat/stream
   const apiBase = baseUrl.endsWith('/v1') ? baseUrl : `${baseUrl}/v1`
-  const eventSource = new EventSource(
-    `${apiBase}/chat/stream?query=${encodeURIComponent(data.query)}${
-      data.collection ? `&collection=${data.collection}` : ''
-    }${data.conversation_id ? `&conversation_id=${data.conversation_id}` : ''}${
-      token ? `&token=${encodeURIComponent(token)}` : ''
-    }`
-  )
+  const url = `${apiBase}/chat/stream?query=${encodeURIComponent(data.query)}${
+    data.collection ? `&collection=${data.collection}` : ''
+  }${data.conversation_id ? `&conversation_id=${data.conversation_id}` : ''}`
 
-  eventSource.onmessage = (event) => {
-    const data = JSON.parse(event.data)
-    if (data.type === 'done') {
-      eventSource.close()
-      onDone?.()
-    } else {
-      onMessage(data)
+  const abortController = new AbortController()
+
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      credentials: 'include', // 关键：携带 Cookie
+      signal: abortController.signal,
+    })
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        throw new Error('Unauthorized')
+      }
+      throw new Error(`HTTP ${response.status}`)
     }
-  }
 
-  eventSource.onerror = (error) => {
-    eventSource.close()
+    const reader = response.body?.getReader()
+    if (!reader) {
+      throw new Error('No response body')
+    }
+
+    const decoder = new TextDecoder()
+    let buffer = ''
+
+    // 读取流数据
+    const readStream = async () => {
+      try {
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) {
+            onDone?.()
+            break
+          }
+
+          buffer += decoder.decode(value, { stream: true })
+          const lines = buffer.split('\n')
+          buffer = lines.pop() || '' // 保留未完成的部分
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const jsonData = line.slice(6)
+              if (jsonData.trim() === '[DONE]') {
+                onDone?.()
+                return
+              }
+              try {
+                const parsed = JSON.parse(jsonData)
+                if (parsed.type === 'done') {
+                  onDone?.()
+                  return
+                }
+                onMessage(parsed)
+              } catch (e) {
+                // 忽略解析错误
+              }
+            }
+          }
+        }
+      } catch (error: any) {
+        if (error.name !== 'AbortError') {
+          onError?.(error)
+        }
+      }
+    }
+
+    readStream()
+
+    // 返回取消函数
+    return () => {
+      abortController.abort()
+      reader.cancel()
+    }
+  } catch (error) {
     onError?.(error)
+    // 返回空取消函数
+    return () => {}
   }
-
-  return eventSource
 }

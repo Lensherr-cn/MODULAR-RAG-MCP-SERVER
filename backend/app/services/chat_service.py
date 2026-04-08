@@ -1,6 +1,7 @@
 """
 Chat Service - 问答服务 (MySQL版本)
 重构为使用SQLAlchemy ORM进行MySQL持久化
+集成了完整的RAG流程：检索 -> 生成回答
 """
 import uuid
 import json
@@ -53,7 +54,7 @@ class ChatService:
             conv = Conversation(
                 id=new_id,
                 user_id=user_id,
-                title="新对话",  # 可以根据第一条消息自动生成
+                title="新对话",
                 collection="default",
                 is_active="Y"
             )
@@ -95,7 +96,7 @@ class ChatService:
         user_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        执行问答
+        执行问答 - 完整RAG流程
 
         Returns:
             {
@@ -117,35 +118,40 @@ class ChatService:
 
             msg_index = (last_msg.message_index + 1) if last_msg else 0
 
-            # 检索相关文档
-            search_results = await rag_service.search(query, collection)
+            # 获取对话历史（用于上下文理解）
+            history = self.get_conversation_history(conv_id)
 
-            # 构建上下文
-            context = []
-            sources = []
-            for result in search_results[:5]:  # 取前5个结果
-                context.append(result)
-                sources.append({
-                    "document_id": result.get("document_id", ""),
-                    "document_name": result.get("document_name", "Unknown"),
-                    "chunk_id": result.get("chunk_id", ""),
-                    "content": result.get("content", "")[:500],  # 截取前500字符
-                    "page": result.get("page"),
-                    "score": result.get("score", 0.0)
-                })
+            # 步骤1：检索相关文档
+            print(f"[ChatService] Searching for: {query[:50]}...")
+            search_results = await rag_service.search(query, collection, top_k=10)
+            print(f"[ChatService] Found {len(search_results)} results")
 
-            # 生成回答（简化实现）
-            if context:
-                answer = f"根据相关文档，我为您找到以下信息：\n\n"
-                for i, ctx in enumerate(context[:3], 1):
-                    answer += f"{i}. {ctx.get('content', '')[:300]}...\n\n"
-                answer += "如需更详细的解答，请告诉我具体想了解哪方面内容。"
+            # 步骤2：生成回答
+            if search_results:
+                result = await rag_service.generate_answer(
+                    query=query,
+                    context=search_results,
+                    conversation_history=history[-6:] if len(history) > 0 else None
+                )
+                answer = result["answer"]
+                sources = result["sources"]
+                related_questions = result["related_questions"]
             else:
-                answer = "抱歉，我暂时没有找到与您问题相关的文档内容。您可以尝试：\n\n1. 使用不同的关键词重新提问\n2. 检查文档是否已上传到知识库\n3. 联系管理员添加相关文档"
-                sources = []
+                # 没有检索到结果时的友好回复
+                answer = """抱歉，我暂时没有找到与您问题相关的文档内容。
 
-            # 生成相关问题
-            related_questions = self._generate_related_questions(query, answer)
+您可以尝试：
+1. 使用不同的关键词重新提问
+2. 检查文档是否已上传到知识库
+3. 联系管理员添加相关文档
+
+如果您有紧急问题，建议直接联系相关部门咨询。"""
+                sources = []
+                related_questions = [
+                    "如何上传文档到知识库？",
+                    "支持哪些类型的文档？",
+                    "如何联系管理员？"
+                ]
 
             # 保存用户消息
             user_msg = ChatMessage(
@@ -168,12 +174,12 @@ class ChatService:
             )
             db.add(assistant_msg)
 
-            # 更新对话消息数
+            # 更新对话消息数和标题
             conv = db.query(Conversation).filter(Conversation.id == conv_id).first()
             if conv:
                 conv.message_count = db.query(ChatMessage).filter(
                     ChatMessage.conversation_id == conv_id
-                ).count() + 2  # +2 因为上面刚添加了两条
+                ).count()
 
                 # 如果是第一条消息，更新对话标题
                 if msg_index == 0:
@@ -198,12 +204,16 @@ class ChatService:
         user_id: Optional[str] = None
     ) -> AsyncGenerator[str, None]:
         """
-        流式问答
+        流式问答 - 完整RAG流程
 
         Yields:
             SSE格式的数据行
         """
         db = self._get_db()
+        full_answer = ""
+        sources = []
+        conv_id = None
+
         try:
             # 获取或创建对话
             conv_id = self.get_or_create_conversation(conversation_id, user_id)
@@ -215,62 +225,59 @@ class ChatService:
 
             msg_index = (last_msg.message_index + 1) if last_msg else 0
 
-            # 检索相关文档
-            search_results = await rag_service.search(query, collection)
+            # 获取对话历史
+            history = self.get_conversation_history(conv_id)
 
-            # 构建回答
+            # 步骤1：检索相关文档
+            print(f"[ChatService] Searching for: {query[:50]}...")
+            search_results = await rag_service.search(query, top_k=10)
+            print(f"[ChatService] Found {len(search_results)} results")
+
+            # 步骤2：流式生成回答
             if search_results:
-                answer_parts = [
-                    "根据相关文档，",
-                    "我为您找到",
-                    "以下信息：",
-                    "\n\n"
-                ]
-                for i, result in enumerate(search_results[:3], 1):
-                    content = result.get('content', '')[:200]
-                    answer_parts.append(f"{i}. {content}...\n\n")
-                answer_parts.append("如需更详细的解答，请告诉我具体想了解哪方面内容。")
+                async for line in rag_service.generate_answer_stream(
+                    query=query,
+                    context=search_results,
+                    conversation_history=history[-6:] if len(history) > 0 else None
+                ):
+                    # 解析SSE数据，收集完整回答
+                    if line.startswith("data: "):
+                        try:
+                            data = json.loads(line[6:])
+                            if data.get("type") == "token":
+                                full_answer += data.get("content", "")
+                            elif data.get("type") == "sources":
+                                sources = data.get("sources", [])
+                        except:
+                            pass
+                    yield line
             else:
-                answer_parts = [
-                    "抱歉，",
-                    "我暂时没有找到",
-                    "与您问题相关的",
-                    "文档内容。",
-                    "\n\n",
-                    "您可以尝试使用",
-                    "不同的关键词",
-                    "重新提问。"
-                ]
+                # 没有检索到结果时的友好回复
+                no_result_msg = """抱歉，我暂时没有找到与您问题相关的文档内容。
 
-            # 构建sources
-            sources = []
-            for result in search_results[:5]:
-                sources.append({
-                    "document_id": result.get("document_id", ""),
-                    "document_name": result.get("document_name", "Unknown"),
-                    "chunk_id": result.get("chunk_id", ""),
-                    "content": result.get("content", "")[:500],
-                    "page": result.get("page"),
-                    "score": result.get("score", 0.0)
-                })
+您可以尝试：
+1. 使用不同的关键词重新提问
+2. 检查文档是否已上传到知识库
+3. 联系管理员添加相关文档"""
 
-            # 流式返回
-            full_answer = ""
-            for part in answer_parts:
-                full_answer += part
-                yield f'data: {json.dumps({"type": "token", "content": part}, ensure_ascii=False)}\n\n'
-
-            # 返回sources
-            if sources:
+                sources = []
                 yield f'data: {json.dumps({"type": "sources", "sources": sources}, ensure_ascii=False)}\n\n'
 
-            # 返回相关问题
-            related = self._generate_related_questions(query, full_answer)
-            if related:
-                yield f'data: {json.dumps({"type": "related_questions", "related_questions": related}, ensure_ascii=False)}\n\n'
+                # 流式返回消息
+                for chunk in no_result_msg.split("\n"):
+                    newline = "\n"
+                    full_answer += chunk + newline
+                    content_with_newline = chunk + newline
+                    yield f'data: {json.dumps({"type": "token", "content": content_with_newline}, ensure_ascii=False)}\n\n'
 
-            # 返回conversation_id和结束标记
-            yield f'data: {json.dumps({"type": "done", "conversation_id": conv_id}, ensure_ascii=False)}\n\n'
+                # 返回相关问题
+                related = [
+                    "如何上传文档到知识库？",
+                    "支持哪些类型的文档？",
+                    "如何联系管理员？"
+                ]
+                yield f'data: {json.dumps({"type": "related_questions", "related_questions": related}, ensure_ascii=False)}\n\n'
+                yield f'data: {json.dumps({"type": "done"}, ensure_ascii=False)}\n\n'
 
             # 保存用户消息
             user_msg = ChatMessage(
@@ -287,7 +294,7 @@ class ChatService:
                 id=str(uuid.uuid4()),
                 conversation_id=conv_id,
                 role="assistant",
-                content=full_answer,
+                content=full_answer.strip(),
                 message_index=msg_index + 1,
                 sources_json=json.dumps(sources) if sources else None
             )
@@ -298,37 +305,44 @@ class ChatService:
             if conv:
                 conv.message_count = db.query(ChatMessage).filter(
                     ChatMessage.conversation_id == conv_id
-                ).count() + 2
+                ).count()
 
                 if msg_index == 0:
                     conv.title = query[:50] + "..." if len(query) > 50 else query
 
             db.commit()
+
+        except Exception as e:
+            print(f"[ChatService] Stream error: {e}")
+            import traceback
+            traceback.print_exc()
+
+            # 返回错误信息
+            error_msg = "抱歉，处理您的请求时出现错误，请稍后重试。"
+            yield f'data: {json.dumps({"type": "token", "content": error_msg}, ensure_ascii=False)}\n\n'
+            yield f'data: {json.dumps({"type": "done"}, ensure_ascii=False)}\n\n'
+
+            # 即使出错也要保存用户消息
+            if conv_id:
+                try:
+                    user_msg = ChatMessage(
+                        id=str(uuid.uuid4()),
+                        conversation_id=conv_id,
+                        role="user",
+                        content=query,
+                        message_index=0
+                    )
+                    db.add(user_msg)
+                    db.commit()
+                except:
+                    pass
         finally:
             db.close()
 
     def _generate_related_questions(self, query: str, answer: str) -> List[str]:
-        """生成相关问题"""
-        # 简化实现，返回固定模板
-        templates = [
-            "{topic}的具体流程是什么？",
-            "如何申请{topic}？",
-            "{topic}有哪些注意事项？",
-            "{topic}的截止时间是什么时候？"
-        ]
-
-        # 提取关键词（简化处理）
-        keywords = ["报销", "年假", "福利", "培训", "考勤", "绩效"]
-        topic = "相关事项"
-        for kw in keywords:
-            if kw in query:
-                topic = kw
-                break
-
-        import random
-        random.seed(hash(query))
-        selected = random.sample(templates, min(3, len(templates)))
-        return [t.format(topic=topic) for t in selected]
+        """生成相关问题（备用方法）"""
+        # 实际由rag_service.generate_related_questions处理
+        return rag_service.generate_related_questions(query, answer)
 
 
 # 全局聊天服务实例

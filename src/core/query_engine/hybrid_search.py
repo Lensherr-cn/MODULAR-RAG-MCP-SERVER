@@ -290,8 +290,8 @@ class HybridSearch:
             )
         
         # Step 5: Apply post-fusion metadata filters (if any)
-        if merged_filters and self.config.metadata_filter_post:
-            fused_results = self._apply_metadata_filters(fused_results, merged_filters)
+        # if merged_filters and self.config.metadata_filter_post:
+        #     fused_results = self._apply_metadata_filters(fused_results, merged_filters)
         
         # Step 6: Limit to top_k
         final_results = fused_results[:effective_top_k]

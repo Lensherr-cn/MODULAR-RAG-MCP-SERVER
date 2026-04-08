@@ -233,8 +233,30 @@ class SparseRetriever:
             True if index is loaded and ready, False otherwise.
         """
         try:
+            # 首先尝试直接加载指定的 collection 名称
             loaded = self.bm25_indexer.load(collection=collection)
-            return loaded
+            if loaded:
+                return True
+            
+            # 如果加载失败，尝试其他可能的命名变体
+            # 处理 knowledge_hub <-> knowledge-hub 的兼容性问题
+            alt_collection = collection.replace('_', '-')
+            if alt_collection != collection:
+                logger.debug(f"Trying alternative collection name: {alt_collection}")
+                loaded = self.bm25_indexer.load(collection=alt_collection)
+                if loaded:
+                    return True
+            
+            # 如果还是失败，再试一次反向替换
+            alt_collection = collection.replace('-', '_')
+            if alt_collection != collection:
+                logger.debug(f"Trying alternative collection name: {alt_collection}")
+                loaded = self.bm25_indexer.load(collection=alt_collection)
+                if loaded:
+                    return True
+            
+            # 所有尝试都失败
+            return False
         except Exception as e:
             logger.warning(f"Failed to load BM25 index for collection '{collection}': {e}")
             return False

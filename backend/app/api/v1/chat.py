@@ -3,8 +3,8 @@ Chat API - 问答接口
 已接入用户认证和数据隔离
 """
 from typing import Optional
-from fastapi import APIRouter, Query, Depends
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Query, Depends, Request
+from fastapi.responses import StreamingResponse, JSONResponse
 
 from app.schemas import ApiResponse, ChatRequest, ChatResponse
 from app.schemas.chat import ChatHistoryResponse
@@ -27,13 +27,17 @@ async def chat(
     - 记录查询历史关联当前用户
     """
     # 记录查询统计
-    stats_service.record_query()
+    stats_service.record_query(
+        user_id=current_user.id,
+        query=request.query,
+        conversation_id=request.conversation_id
+    )
 
     # 执行问答
     result = await chat_service.chat(
         query=request.query,
         conversation_id=request.conversation_id,
-        collection=request.collection or "default",
+        collection=request.collection or "knowledge-hub",
         user_id=current_user.id
     )
 
@@ -48,7 +52,7 @@ async def chat(
 async def chat_stream(
     query: str,
     conversation_id: Optional[str] = Query(None),
-    collection: str = Query("default"),
+    collection: str = Query("knowledge-hub"),
     current_user: User = Depends(get_current_user)
 ):
     """
@@ -57,7 +61,11 @@ async def chat_stream(
     使用 EventSource 接收流式响应
     """
     # 记录查询统计
-    stats_service.record_query()
+    stats_service.record_query(
+        user_id=current_user.id,
+        query=query,
+        conversation_id=conversation_id
+    )
 
     async def event_generator():
         async for line in chat_service.chat_stream(
@@ -76,6 +84,30 @@ async def chat_stream(
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no"
         }
+    )
+
+
+@router.get("/debug")
+async def chat_debug(request: Request):
+    """
+    调试端点 - 查看请求头信息
+    """
+    headers = dict(request.headers)
+    # 隐藏敏感信息
+    if "authorization" in headers:
+        auth = headers["authorization"]
+        headers["authorization"] = auth[:20] + "..." if len(auth) > 20 else auth
+    if "cookie" in headers:
+        headers["cookie"] = "[hidden]"
+
+    return ApiResponse(
+        code=200,
+        data={
+            "headers": headers,
+            "cookies": list(request.cookies.keys()),
+            "client": str(request.client) if request.client else None,
+        },
+        message="debug info"
     )
 
 
