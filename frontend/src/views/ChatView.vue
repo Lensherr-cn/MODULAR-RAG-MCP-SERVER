@@ -93,7 +93,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, onMounted, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   ChatDotRound,
@@ -133,6 +133,9 @@ const scrollToBottom = () => {
 
 const handleSend = async (text: string) => {
   if (!text.trim()) return
+
+  // 用户开始新对话，清除清空标记
+  clearChatClearedMark()
 
   chatStore.addUserMessage(text)
   chatStore.isLoading = true
@@ -218,25 +221,53 @@ const handleRelatedSelect = (question: string) => {
   handleSend(question)
 }
 
+// 检查用户是否已经清空过对话
+const hasUserClearedChat = () => {
+  return localStorage.getItem('chat_cleared') === 'true'
+}
+
+// 标记对话已清空
+const markChatCleared = () => {
+  localStorage.setItem('chat_cleared', 'true')
+}
+
+// 清除清空标记（当用户开始新对话时）
+const clearChatClearedMark = () => {
+  localStorage.removeItem('chat_cleared')
+}
+
 const handleClear = () => {
   chatStore.clearMessages()
+  markChatCleared()
   ElMessage.success('对话已清空')
 }
 
 // 加载最近对话历史
 const loadRecentConversations = async () => {
+  // 如果用户已经清空过对话，则不加载历史
+  if (hasUserClearedChat()) {
+    console.log('[Chat] User has cleared chat, skip loading history')
+    return
+  }
+
+  console.log('[Chat] Loading recent conversations...')
   try {
     const { data } = await getRecentConversationsApi()
+    console.log('[Chat] API response:', data)
     if (data.data && data.data.conversations) {
+      console.log('[Chat] Loaded', data.data.conversations.length, 'conversations')
       chatStore.loadRecentConversations(data.data.conversations)
+      console.log('[Chat] Messages after load:', chatStore.messages.length)
+    } else {
+      console.log('[Chat] No conversations in response')
     }
   } catch (error) {
-    console.error('Failed to load recent conversations:', error)
-    // 加载失败不影响用户正常使用，静默处理
+    console.error('[Chat] Failed to load recent conversations:', error)
   }
 }
 
 onMounted(() => {
+  console.log('[Chat] onMounted')
   // 优先加载最近对话历史
   loadRecentConversations()
 
@@ -246,6 +277,19 @@ onMounted(() => {
     handleSend(q)
   }
 })
+
+// 监听路由变化，当从其他页面返回时重新加载
+watch(
+  () => route.path,
+  (newPath, oldPath) => {
+    console.log('[Chat] Route changed from', oldPath, 'to', newPath)
+    if (newPath === '/chat') {
+      console.log('[Chat] Reloading conversations...')
+      loadRecentConversations()
+    }
+  },
+  { immediate: true }
+)
 </script>
 
 <style scoped lang="scss">
