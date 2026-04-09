@@ -3,7 +3,7 @@
 This module implements the main pipeline that orchestrates the complete
 document ingestion flow:
     1. File Integrity Check (SHA256 skip check)
-    2. Document Loading (PDF → Document)
+    2. Document Loading (PDF/Markdown/Text/Word/Excel → Document)
     3. Chunking (Document → Chunks)
     4. Transform (Refine + Enrich + Caption)
     5. Encoding (Dense + Sparse vectors)
@@ -14,6 +14,7 @@ Design Principles:
 - Observable: Logs progress and stage completion
 - Graceful Degradation: LLM failures don't block pipeline
 - Idempotent: SHA256-based skip for unchanged files
+- Multi-Format: Supports PDF, Markdown, Text, Word, Excel
 """
 
 from pathlib import Path
@@ -27,7 +28,7 @@ from src.observability.logger import get_logger
 
 # Libs layer imports
 from src.libs.loader.file_integrity import SQLiteIntegrityChecker
-from src.libs.loader.pdf_loader import PdfLoader
+from src.libs.loader.loader_factory import LoaderFactory
 from src.libs.embedding.embedding_factory import EmbeddingFactory
 from src.libs.vector_store.vector_store_factory import VectorStoreFactory
 
@@ -140,14 +141,11 @@ class IngestionPipeline:
         # Stage 1: File Integrity
         self.integrity_checker = SQLiteIntegrityChecker(db_path=str(resolve_path("data/db/ingestion_history.db")))
         logger.info("  ✓ FileIntegrityChecker initialized")
-        
-        # Stage 2: Loader
-        self.loader = PdfLoader(
-            extract_images=True,
-            image_storage_dir=str(resolve_path(f"data/images/{collection}"))
-        )
-        logger.info("  ✓ PdfLoader initialized")
-        
+
+        # Stage 2: Loader (created dynamically in run() based on file type)
+        self._image_storage_dir = str(resolve_path(f"data/images/{collection}"))
+        logger.info("  ✓ LoaderFactory ready (multi-format support)")
+
         # Stage 3: Chunker
         self.chunker = DocumentChunker(settings)
         logger.info("  ✓ DocumentChunker initialized")
@@ -201,15 +199,15 @@ class IngestionPipeline:
         on_progress: Optional[Callable[[str, int, int], None]] = None,
     ) -> PipelineResult:
         """Execute the full ingestion pipeline on a file.
-        
+
         Args:
-            file_path: Path to the file to process (e.g., PDF)
+            file_path: Path to the file to process (PDF, Markdown, Text, Word, Excel)
             trace: Optional trace context for observability
             on_progress: Optional callback ``(stage_name, current, total)``
                 invoked when each pipeline stage completes.  *current* is
                 the 1-based index of the completed stage; *total* is the
                 number of stages (currently 6).
-        
+
         Returns:
             PipelineResult with success status and statistics
         """
@@ -220,22 +218,22 @@ class IngestionPipeline:
         def _notify(stage_name: str, step: int) -> None:
             if on_progress is not None:
                 on_progress(stage_name, step, _total_stages)
-        
+
         logger.info(f"=" * 60)
         logger.info(f"Starting Ingestion Pipeline for: {file_path}")
         logger.info(f"Collection: {self.collection}")
         logger.info(f"=" * 60)
-        
+
         try:
             # ─────────────────────────────────────────────────────────────
             # Stage 1: File Integrity Check
             # ─────────────────────────────────────────────────────────────
             logger.info("\n📋 Stage 1: File Integrity Check")
             _notify("integrity", 1)
-            
+
             file_hash = self.integrity_checker.compute_sha256(str(file_path))
             logger.info(f"  File hash: {file_hash[:16]}...")
-            
+
             if not self.force and self.integrity_checker.should_skip(file_hash):
                 logger.info(f"  ⏭️  File already processed, skipping (use force=True to reprocess)")
                 return PipelineResult(
@@ -244,36 +242,46 @@ class IngestionPipeline:
                     doc_id=file_hash,
                     stages={"integrity": {"skipped": True, "reason": "already_processed"}}
                 )
-            
+
             stages["integrity"] = {"file_hash": file_hash, "skipped": False}
             logger.info("  ✓ File needs processing")
-            
+
             # ─────────────────────────────────────────────────────────────
             # Stage 2: Document Loading
             # ─────────────────────────────────────────────────────────────
             logger.info("\n📄 Stage 2: Document Loading")
             _notify("load", 2)
-            
+
+            # Create appropriate loader based on file extension
+            loader = LoaderFactory.create(
+                file_path,
+                extract_images=True,
+                image_storage_dir=self._image_storage_dir
+            )
+            loader_name = LoaderFactory.get_loader_name(file_path)
+            logger.info(f"  Using loader: {loader_name}")
+
             _t0 = time.monotonic()
-            document = self.loader.load(str(file_path))
+            document = loader.load(str(file_path))
             _elapsed = (time.monotonic() - _t0) * 1000.0
-            
+
             text_preview = document.text[:200].replace('\n', ' ') + "..." if len(document.text) > 200 else document.text
             image_count = len(document.metadata.get("images", []))
-            
+
             logger.info(f"  Document ID: {document.id}")
             logger.info(f"  Text length: {len(document.text)} chars")
             logger.info(f"  Images extracted: {image_count}")
             logger.info(f"  Preview: {text_preview[:100]}...")
-            
+
             stages["loading"] = {
                 "doc_id": document.id,
                 "text_length": len(document.text),
-                "image_count": image_count
+                "image_count": image_count,
+                "loader": loader_name,
             }
             if trace is not None:
                 trace.record_stage("load", {
-                    "method": "markitdown",
+                    "method": loader_name,
                     "doc_id": document.id,
                     "text_length": len(document.text),
                     "image_count": image_count,

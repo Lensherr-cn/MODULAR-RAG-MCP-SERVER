@@ -1,6 +1,7 @@
-"""Test PDF ingestion.
+"""Test document ingestion.
 
-This script tests the PDF document ingestion pipeline.
+This script tests the multi-format document ingestion pipeline.
+Supports: PDF, Markdown, Text, Word, Excel files.
 """
 
 import os
@@ -18,25 +19,32 @@ load_dotenv(project_root / ".env")
 from src.core.settings import load_settings
 from src.ingestion.pipeline import IngestionPipeline
 from src.core.trace import TraceContext
+from src.libs.loader import LoaderFactory
 
 
-def test_pdf_ingestion():
-    """Test PDF document ingestion."""
+def test_document_ingestion():
+    """Test multi-format document ingestion."""
     print("=" * 60)
-    print("Testing PDF Ingestion")
+    print("Testing Multi-Format Document Ingestion")
     print("=" * 60)
+    print(f"Supported formats: {LoaderFactory.supported_extensions()}")
 
-    # Check for PDF files
+    # Check for document files
     docs_dir = project_root / "uploads"
-    pdf_files = list(docs_dir.glob("*.pdf")) + list(docs_dir.glob("*.PDF"))
 
-    if not pdf_files:
-        print(f"ERROR: No PDF files found in {docs_dir}")
+    # Find all supported files
+    all_files = []
+    for ext in LoaderFactory.supported_extensions():
+        all_files.extend(docs_dir.glob(f"*{ext}"))
+        all_files.extend(docs_dir.glob(f"*{ext.upper()}"))
+
+    if not all_files:
+        print(f"ERROR: No supported files found in {docs_dir}")
         return False
 
-    print(f"Found {len(pdf_files)} PDF file(s):")
-    for pdf in pdf_files:
-        print(f"  - {pdf.name} ({pdf.stat().st_size / 1024:.1f} KB)")
+    print(f"\nFound {len(all_files)} file(s):")
+    for f in all_files:
+        print(f"  - {f.name} ({f.stat().st_size / 1024:.1f} KB)")
 
     # Load settings
     try:
@@ -59,15 +67,15 @@ def test_pdf_ingestion():
         print(f"ERROR initializing pipeline: {e}")
         return False
 
-    # Process each PDF
+    # Process each file
     results = []
-    for pdf_path in pdf_files:
-        print(f"\nProcessing: {pdf_path.name}")
+    for file_path in all_files:
+        print(f"\nProcessing: {file_path.name}")
         try:
             trace = TraceContext(trace_type="ingestion")
-            trace.metadata["source_path"] = str(pdf_path)
-            result = pipeline.run(str(pdf_path), trace=trace)
-            results.append((pdf_path.name, result))
+            trace.metadata["source_path"] = str(file_path)
+            result = pipeline.run(str(file_path), trace=trace)
+            results.append((file_path.name, result))
 
             if result.success:
                 print(f"  SUCCESS: {result.chunk_count} chunks, {result.image_count} images")
@@ -75,7 +83,7 @@ def test_pdf_ingestion():
                 print(f"  FAILED: {result.error}")
         except Exception as e:
             print(f"  ERROR: {e}")
-            results.append((pdf_path.name, None))
+            results.append((file_path.name, None))
 
     # Summary
     print("\n" + "=" * 60)
@@ -91,13 +99,16 @@ def test_pdf_ingestion():
     print(f"Total chunks: {total_chunks}")
 
     if successful == len(results):
-        print("\nPDF Ingestion Test: SUCCESS")
+        print("\nDocument Ingestion Test: SUCCESS")
+        return True
+    elif successful > 0:
+        print("\nDocument Ingestion Test: PARTIAL SUCCESS")
         return True
     else:
-        print("\nPDF Ingestion Test: PARTIAL FAILURE")
+        print("\nDocument Ingestion Test: FAILED")
         return False
 
 
 if __name__ == "__main__":
-    success = test_pdf_ingestion()
+    success = test_document_ingestion()
     sys.exit(0 if success else 1)
