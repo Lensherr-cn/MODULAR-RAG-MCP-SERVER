@@ -127,11 +127,12 @@ async def get_recent_conversations(
 
     db = SessionLocal()
     try:
-        # 获取当前用户最近更新的 5 个对话
+        # 获取当前用户最近更新的 5 个对话（检查实际有消息的）
+        from sqlalchemy import exists
         query = db.query(Conversation).filter(
             Conversation.is_active == "Y",
             Conversation.user_id == current_user.id,
-            Conversation.message_count > 0
+            exists().where(ChatMessage.conversation_id == Conversation.id)
         ).order_by(desc(Conversation.updated_at)).limit(5)
 
         conversations = query.all()
