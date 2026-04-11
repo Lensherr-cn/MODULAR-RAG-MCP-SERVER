@@ -43,6 +43,7 @@ from src.ingestion.embedding.batch_processor import BatchProcessor
 from src.ingestion.storage.bm25_indexer import BM25Indexer
 from src.ingestion.storage.vector_upserter import VectorUpserter
 from src.ingestion.storage.image_storage import ImageStorage
+from src.ingestion.quality.document_quality_checker import DocumentQualityChecker
 
 logger = get_logger(__name__)
 
@@ -189,7 +190,20 @@ class IngestionPipeline:
             images_root=str(resolve_path("data/images"))
         )
         logger.info("  ✓ ImageStorage initialized")
-        
+
+        # Stage 1.5: Quality Checker (新增)
+        quality_config = settings.ingestion.quality_check if settings.ingestion else None
+        if quality_config and quality_config.enabled:
+            self.quality_checker = DocumentQualityChecker(
+                min_valid_ratio=quality_config.min_valid_ratio,
+                sample_pages=quality_config.sample_pages,
+                sample_chars=quality_config.sample_chars
+            )
+            logger.info(f"  ✓ DocumentQualityChecker initialized (threshold={quality_config.min_valid_ratio:.0%})")
+        else:
+            self.quality_checker = None
+            logger.info("  ⏭️  Quality check disabled")
+
         logger.info("Pipeline initialization complete!")
     
     def run(
@@ -245,6 +259,32 @@ class IngestionPipeline:
 
             stages["integrity"] = {"file_hash": file_hash, "skipped": False}
             logger.info("  ✓ File needs processing")
+
+            # ─────────────────────────────────────────────────────────────
+            # Stage 1.5: Quality Check (新增)
+            # ─────────────────────────────────────────────────────────────
+            if self.quality_checker:
+                logger.info("\n🔍 Stage 1.5: Document Quality Check")
+
+                quality_result = self.quality_checker.check(file_path)
+
+                stages["quality_check"] = {
+                    "passed": quality_result.passed,
+                    "score": quality_result.score,
+                    "total_chars": quality_result.total_chars,
+                    "valid_chars": quality_result.valid_chars,
+                }
+
+                if not quality_result.passed:
+                    logger.warning(f"  ❌ Quality check failed: {quality_result.message}")
+                    return PipelineResult(
+                        success=False,
+                        file_path=str(file_path),
+                        error=quality_result.message,
+                        stages=stages
+                    )
+
+                logger.info(f"  ✓ Quality check passed (score: {quality_result.score:.1%})")
 
             # ─────────────────────────────────────────────────────────────
             # Stage 2: Document Loading

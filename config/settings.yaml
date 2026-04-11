@@ -30,7 +30,7 @@ embedding:
   provider: "qwen"
   model: "text-embedding-v4"
   dimensions: 1024
-  api_key: "YOUR_DASHSCOPE_API_KEY"
+  api_key: "sk-778ba8d54c83488caf6fab2d00c3bc75"
   base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
 
 additional_embeddings:
@@ -64,7 +64,7 @@ vision_llm:
 vector_store:
   provider: "chroma"  # Options: chroma, qdrant, pinecone
   persist_directory: "./data/db/chroma"
-  collection_name: "knowledge_hub"
+  collection_name: "knowledge-hub"
 
 # =============================================================================
 # Retrieval Configuration
@@ -112,13 +112,20 @@ ingestion:
   chunk_overlap: 200
   splitter: "recursive"  # Options: recursive, semantic, fixed_length
   batch_size: 100
-  
+
   # Chunk Refiner Configuration (C5)
   chunk_refiner:
-    use_llm: true  # Set to true to enable LLM-based refinement (requires LLM config)
+    use_llm: false  # Set to true to enable LLM-based refinement (requires LLM config)
     # When use_llm is false or LLM call fails, falls back to rule-based refinement
-  
+
   # Metadata Enricher Configuration (C6)
   metadata_enricher:
-    use_llm: true  # Set to true to enable LLM-based enrichment (requires LLM config)
+    use_llm: false  # Set to true to enable LLM-based enrichment (requires LLM config)
     # When use_llm is false or LLM call fails, falls back to rule-based enrichment
+
+  # Quality Check Configuration (Document Pre-validation)
+  quality_check:
+    enabled: true              # Enable document quality pre-check
+    min_valid_ratio: 0.8       # Minimum valid character ratio threshold (80%)
+    sample_pages: 3            # Number of pages to sample for PDFs
+    sample_chars: 5000         # Maximum characters to sample per page/file

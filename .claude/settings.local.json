@@ -1,0 +1,38 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(where python:*)",
+      "Bash(\"C:\\\\Users\\\\yulan\\\\AppData\\\\Local\\\\Microsoft\\\\WindowsApps\\\\python.exe\" --version)",
+      "Bash(npx skills:*)",
+      "Bash(python main.py)",
+      "Bash(pip install:*)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8000/health)",
+      "Bash(curl:*)",
+      "Bash(python -c \":*)",
+      "Bash(tasklist)",
+      "Bash(findstr -i 'python uvicorn')",
+      "Bash(netstat -ano)",
+      "Bash(findstr :8000)",
+      "Bash(taskkill:*)",
+      "Bash(cmd //c \"taskkill /F /PID 22464\")",
+      "Bash(findstr LISTENING)",
+      "Bash(cmd //c \"taskkill /F /PID 37136 & taskkill /F /PID 22464\" 2>nul)",
+      "Bash(cmd //c \"taskkill /F /PID 22464 & taskkill /F /PID 37136 & taskkill /F /PID 36596\" 2>nul)",
+      "Bash(cmd //c \"taskkill /F /PID 22464 & taskkill /F /PID 37136 & taskkill /F /PID 36596\")",
+      "Bash(for pid:*)",
+      "Bash(do cmd:*)",
+      "Bash(done)",
+      "Bash(wmic process:*)",
+      "Bash(findstr :5173)",
+      "Bash(npm run:*)",
+      "Bash(findstr -E \":5173|:8000\")",
+      "Bash(findstr -E \"5173|8000\")",
+      "Bash(findstr \"43692\")",
+      "Bash(git config:*)",
+      "Bash(source ../.venv/Scripts/activate)",
+      "Bash(python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload)",
+      "Bash(python -c \"from src.libs.loader import LoaderFactory; print\\(''Supported extensions:'', LoaderFactory.supported_extensions\\(\\)\\)\")",
+      "Bash(python -m pytest tests/unit/test_quality_checker.py -v --tb=short)"
+    ]
+  }
+}
