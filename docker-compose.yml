@@ -1,0 +1,78 @@
+version: '3.8'
+
+services:
+  # MySQL 数据库
+  mysql:
+    image: mysql:8.0
+    container_name: knowledge-hub-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root123456}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-knowledge_hub}
+      MYSQL_USER: ${MYSQL_USER:-kh_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-kh_password}
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./backend/scripts/init_db.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # FastAPI 后端
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: knowledge-hub-backend
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    volumes:
+      - ./data:/app/data
+      - ./config:/app/config
+      - ./logs:/app/logs
+      - ./uploads:/app/uploads
+    environment:
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - QWEN_API_KEY=${QWEN_API_KEY}
+      - GLM_API_KEY=${GLM_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_USER=${MYSQL_USER:-kh_user}
+      - DB_PASSWORD=${MYSQL_PASSWORD:-kh_password}
+      - DB_NAME=${MYSQL_DATABASE:-knowledge_hub}
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Vue 前端 + Nginx
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: knowledge-hub-frontend
+    ports:
+      - "${FRONTEND_PORT:-80}:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  mysql_data:
+
+networks:
+  default:
+    name: knowledge-hub-network

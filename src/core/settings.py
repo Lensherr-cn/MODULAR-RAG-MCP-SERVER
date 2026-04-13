@@ -168,6 +168,15 @@ class VisionLLMSettings:
 
 
 @dataclass(frozen=True)
+class QualityCheckSettings:
+    """Quality check configuration for document pre-validation."""
+    enabled: bool
+    min_valid_ratio: float
+    sample_pages: int
+    sample_chars: int
+
+
+@dataclass(frozen=True)
 class IngestionSettings:
     chunk_size: int
     chunk_overlap: int
@@ -175,6 +184,7 @@ class IngestionSettings:
     batch_size: int
     chunk_refiner: Optional[Dict[str, Any]] = None  # 动态配置
     metadata_enricher: Optional[Dict[str, Any]] = None  # 动态配置
+    quality_check: Optional[QualityCheckSettings] = None  # 质量检测配置
 
 
 @dataclass(frozen=True)
@@ -246,6 +256,19 @@ class Settings:
         ingestion_settings = None
         if "ingestion" in data:
             ingestion = _require_mapping(data, "ingestion", "settings")
+
+            # Parse quality_check configuration
+            quality_check_settings = None
+            if "quality_check" in ingestion:
+                qc = ingestion["quality_check"]
+                if isinstance(qc, dict):
+                    quality_check_settings = QualityCheckSettings(
+                        enabled=qc.get("enabled", True),
+                        min_valid_ratio=qc.get("min_valid_ratio", 0.8),
+                        sample_pages=qc.get("sample_pages", 3),
+                        sample_chars=qc.get("sample_chars", 5000),
+                    )
+
             ingestion_settings = IngestionSettings(
                 chunk_size=_require_int(ingestion, "chunk_size", "ingestion"),
                 chunk_overlap=_require_int(ingestion, "chunk_overlap", "ingestion"),
@@ -253,6 +276,7 @@ class Settings:
                 batch_size=_require_int(ingestion, "batch_size", "ingestion"),
                 chunk_refiner=ingestion.get("chunk_refiner"),  # 可选配置
                 metadata_enricher=ingestion.get("metadata_enricher"),  # 可选配置
+                quality_check=quality_check_settings,
             )
 
         vision_llm_settings = None
