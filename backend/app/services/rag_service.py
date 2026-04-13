@@ -39,6 +39,9 @@ class RAGService:
         return cls._instance
 
     def __init__(self):
+        self.use_reranker = None
+        self.reranker = None
+        self.reranker_top_k = 5
         if RAGService._initialized:
             return
 
@@ -137,6 +140,23 @@ class RAGService:
         self.llm = QwenLLM(settings=self.settings)
         print(f"[RAGService] QwenLLM initialized with main llm config")
 
+
+    def init_reranker(self):
+        """初始化reRanker"""
+        if self.settings is None:
+            print("[RAGService] Warning: Cannot initialize reranker without settings")
+            return
+        rerank_config = getattr(self.settings, 'reranker', None)
+        if rerank_config is not  None:
+            self.use_reranker = getattr(rerank_config, 'enable', False)
+        if self.use_reranker:  # lazy load reranker
+            from src.core.query_engine.reranker import create_core_reranker
+            self.reranker = create_core_reranker(settings=self.settings)
+            self.reranker_top_k = getattr(rerank_config, 'top_k', 5)
+        else:
+            self.reranker = None
+
+
     async def search(
         self,
         query: str,
@@ -171,20 +191,39 @@ class RAGService:
                 return_details=False
             )
 
+            # reranker重排序
+            if self.use_reranker and self.reranker is not None:
+                results = self.reranker.rerank(query, results.results,self.reranker_top_k)
+
             # 转换为字典列表
             search_results = []
             for r in results:
-                search_results.append({
-                    "chunk_id": r.chunk_id,
-                    "document_id": r.metadata.get("document_id", ""),
-                    "document_name": r.metadata.get("source_path", "Unknown").split("/")[-1],
-                    "content": r.text or "",
-                    "page": r.metadata.get("page"),
-                    "score": r.score,
-                    "metadata": r.metadata
-                })
+                # 重排序后results是字典格式，未重排序时是对象格式
+                if isinstance(r, dict):
+                    search_results.append({
+                        "chunk_id": r.get("chunk_id", ""),
+                        "document_id": r.get("metadata", {}).get("document_id", ""),
+                        "document_name": r.get("metadata", {}).get("source_path", "Unknown").split("/")[-1],
+                        "content": r.get("text") or r.get("content", ""),
+                        "page": r.get("metadata", {}).get("page"),
+                        "score": r.get("score", 0.0),
+                        "metadata": r.get("metadata", {}),
+                        "rerank_score": r.get("rerank_score", 0.0)
+                    })
+                else:
+                    search_results.append({
+                        "chunk_id": getattr(r, "chunk_id", ""),
+                        "document_id": getattr(r, "metadata", {}).get("document_id", ""),
+                        "document_name": getattr(r, "metadata", {}).get("source_path", "Unknown").split("/")[-1],
+                        "content": getattr(r, "text", "") or "",
+                        "page": getattr(r, "metadata", {}).get("page"),
+                        "score": getattr(r, "score", 0.0),
+                        "metadata": getattr(r, "metadata", {}),
+                        "rerank_score": getattr(r, "rerank_score", 0.0)
+                    })
 
             return search_results
+
 
         except Exception as e:
             print(f"[RAGService] Search error: {e}")
@@ -273,14 +312,18 @@ class RAGService:
             # 构建sources
             sources = []
             for result in context[:5]:
-                sources.append({
+                source_data = {
                     "document_id": result.get("document_id", ""),
                     "document_name": result.get("document_name", "Unknown"),
                     "chunk_id": result.get("chunk_id", ""),
                     "content": result.get("content", "")[:500],
                     "page": result.get("page"),
                     "score": result.get("score", 0.0)
-                })
+                }
+                # 如果有rerank_score，添加到source中
+                if "rerank_score" in result:
+                    source_data["rerank_score"] = result.get("rerank_score", 0.0)
+                sources.append(source_data)
 
             return {
                 "answer": response.content,
@@ -318,14 +361,18 @@ class RAGService:
         # 首先返回sources
         sources = []
         for result in context[:5]:
-            sources.append({
+            source_data = {
                 "document_id": result.get("document_id", ""),
                 "document_name": result.get("document_name", "Unknown"),
                 "chunk_id": result.get("chunk_id", ""),
                 "content": result.get("content", "")[:500],
                 "page": result.get("page"),
                 "score": result.get("score", 0.0)
-            })
+            }
+            # 如果有rerank_score，添加到source中
+            if "rerank_score" in result:
+                source_data["rerank_score"] = result.get("rerank_score", 0.0)
+            sources.append(source_data)
 
         yield f'data: {json.dumps({"type": "sources", "sources": sources}, ensure_ascii=False)}\n\n'
 

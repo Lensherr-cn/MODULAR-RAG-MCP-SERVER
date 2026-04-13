@@ -80,7 +80,7 @@ retrieval:
 # =============================================================================
 rerank:
   enabled: false
-  provider: "none"  # Options: none, cross_encoder, llm
+  provider: "cross_encoder"  # Options: none, cross_encoder, llm
   model: "cross-encoder/ms-marco-MiniLM-L-6-v2"
   top_k: 5
 

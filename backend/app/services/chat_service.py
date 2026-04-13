@@ -128,6 +128,10 @@ class ChatService:
 
             # 步骤2：生成回答
             if search_results:
+                # 按rerank_score重新排序（如果存在该字段）
+                if any("rerank_score" in r for r in search_results):
+                    search_results.sort(key=lambda x: x.get("rerank_score", 0.0), reverse=True)
+                
                 result = await rag_service.generate_answer(
                     query=query,
                     context=search_results,
@@ -235,6 +239,10 @@ class ChatService:
 
             # 步骤2：流式生成回答
             if search_results:
+                # 按rerank_score重新排序（如果存在该字段）
+                if any("rerank_score" in r for r in search_results):
+                    search_results.sort(key=lambda x: x.get("rerank_score", 0.0), reverse=True)
+                
                 async for line in rag_service.generate_answer_stream(
                     query=query,
                     context=search_results,
