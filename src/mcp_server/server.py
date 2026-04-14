@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
 
 SERVER_NAME = "modular-rag-mcp-server"
-SERVER_VERSION = "0.1.0"
+SERVER_VERSION = "0.2.0"
 
 
 def _redirect_all_loggers_to_stderr() -> None:
@@ -75,6 +75,8 @@ def _preload_heavy_imports() -> None:
         import src.ingestion.storage.bm25_indexer  # noqa: F401
         import src.libs.embedding.embedding_factory  # noqa: F401
         import src.libs.vector_store.vector_store_factory  # noqa: F401
+        import src.libs.llm.llm_factory  # noqa: F401
+        import src.libs.llm.qwen_llm  # noqa: F401
     except ImportError:
         pass
 

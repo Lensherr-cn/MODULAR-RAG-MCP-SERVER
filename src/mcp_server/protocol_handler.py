@@ -198,14 +198,18 @@ def _register_default_tools(protocol_handler: ProtocolHandler) -> None:
     # Import and register query_knowledge_hub tool
     from src.mcp_server.tools.query_knowledge_hub import register_tool as register_query_tool
     register_query_tool(protocol_handler)
-    
+
     # Import and register list_collections tool
     from src.mcp_server.tools.list_collections import register_tool as register_list_tool
     register_list_tool(protocol_handler)
-    
+
     # Import and register get_document_summary tool
     from src.mcp_server.tools.get_document_summary import register_tool as register_summary_tool
     register_summary_tool(protocol_handler)
+
+    # Import and register rag_chat tool (full RAG: search + LLM answer)
+    from src.mcp_server.tools.rag_chat import register_tool as register_rag_chat_tool
+    register_rag_chat_tool(protocol_handler)
 
 
 def create_mcp_server(

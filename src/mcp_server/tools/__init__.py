@@ -13,6 +13,15 @@ from src.mcp_server.tools.query_knowledge_hub import (
     register_tool as register_query_knowledge_hub,
 )
 
+from src.mcp_server.tools.rag_chat import (
+    TOOL_NAME as RAG_CHAT_NAME,
+    TOOL_DESCRIPTION as RAG_CHAT_DESCRIPTION,
+    TOOL_INPUT_SCHEMA as RAG_CHAT_SCHEMA,
+    RagChatTool,
+    rag_chat_handler,
+    register_tool as register_rag_chat,
+)
+
 __all__ = [
     "QUERY_KNOWLEDGE_HUB_NAME",
     "QUERY_KNOWLEDGE_HUB_DESCRIPTION",
@@ -20,4 +29,10 @@ __all__ = [
     "QueryKnowledgeHubTool",
     "query_knowledge_hub_handler",
     "register_query_knowledge_hub",
+    "RAG_CHAT_NAME",
+    "RAG_CHAT_DESCRIPTION",
+    "RAG_CHAT_SCHEMA",
+    "RagChatTool",
+    "rag_chat_handler",
+    "register_rag_chat",
 ]
