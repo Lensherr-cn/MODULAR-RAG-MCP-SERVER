@@ -51,6 +51,7 @@ class RAGService:
         self._load_settings()
         self._init_hybrid_search()
         self._init_llm()
+        self._init_reranker()
         RAGService._initialized = True
 
     def _load_settings(self):
@@ -141,20 +142,33 @@ class RAGService:
         print(f"[RAGService] QwenLLM initialized with main llm config")
 
 
-    def init_reranker(self):
+    def _init_reranker(self):
         """初始化reRanker"""
         if self.settings is None:
             print("[RAGService] Warning: Cannot initialize reranker without settings")
             return
-        rerank_config = getattr(self.settings, 'reranker', None)
-        if rerank_config is not  None:
-            self.use_reranker = getattr(rerank_config, 'enable', False)
+
+        rerank_config = getattr(self.settings, 'rerank', None)
+        if rerank_config is not None:
+            self.use_reranker = getattr(rerank_config, 'enabled', False)
+        else:
+            self.use_reranker = False
+        
         if self.use_reranker:  # lazy load reranker
-            from src.core.query_engine.reranker import create_core_reranker
-            self.reranker = create_core_reranker(settings=self.settings)
-            self.reranker_top_k = getattr(rerank_config, 'top_k', 5)
+            try:
+                from src.core.query_engine.reranker import create_core_reranker
+                self.reranker = create_core_reranker(settings=self.settings)
+                self.reranker_top_k = getattr(rerank_config, 'top_k', 5)
+                print(f"[RAGService] Reranker initialized successfully (top_k={self.reranker_top_k})")
+            except Exception as e:
+                print(f"[RAGService] Error initializing reranker: {e}")
+                import traceback
+                traceback.print_exc()
+                self.reranker = None
+                self.use_reranker = False
         else:
             self.reranker = None
+            print("[RAGService] Reranker is disabled in config")
 
 
     async def search(
@@ -193,34 +207,22 @@ class RAGService:
 
             # reranker重排序
             if self.use_reranker and self.reranker is not None:
-                results = self.reranker.rerank(query, results.results,self.reranker_top_k)
+                rerank_result = self.reranker.rerank(query, results, self.reranker_top_k)
+                results = rerank_result.results
 
             # 转换为字典列表
             search_results = []
             for r in results:
-                # 重排序后results是字典格式，未重排序时是对象格式
-                if isinstance(r, dict):
-                    search_results.append({
-                        "chunk_id": r.get("chunk_id", ""),
-                        "document_id": r.get("metadata", {}).get("document_id", ""),
-                        "document_name": r.get("metadata", {}).get("source_path", "Unknown").split("/")[-1],
-                        "content": r.get("text") or r.get("content", ""),
-                        "page": r.get("metadata", {}).get("page"),
-                        "score": r.get("score", 0.0),
-                        "metadata": r.get("metadata", {}),
-                        "rerank_score": r.get("rerank_score", 0.0)
-                    })
-                else:
-                    search_results.append({
-                        "chunk_id": getattr(r, "chunk_id", ""),
-                        "document_id": getattr(r, "metadata", {}).get("document_id", ""),
-                        "document_name": getattr(r, "metadata", {}).get("source_path", "Unknown").split("/")[-1],
-                        "content": getattr(r, "text", "") or "",
-                        "page": getattr(r, "metadata", {}).get("page"),
-                        "score": getattr(r, "score", 0.0),
-                        "metadata": getattr(r, "metadata", {}),
-                        "rerank_score": getattr(r, "rerank_score", 0.0)
-                    })
+                search_results.append({
+                    "chunk_id": getattr(r, "chunk_id", ""),
+                    "document_id": getattr(r, "metadata", {}).get("document_id", ""),
+                    "document_name": getattr(r, "metadata", {}).get("source_path", "Unknown").split("/")[-1],
+                    "content": getattr(r, "text", "") or "",
+                    "page": getattr(r, "metadata", {}).get("page"),
+                    "score": getattr(r, "score", 0.0),
+                    "metadata": getattr(r, "metadata", {}),
+                    "rerank_score": getattr(r, "metadata", {}).get("rerank_score", 0.0)
+                })
 
             return search_results
 
