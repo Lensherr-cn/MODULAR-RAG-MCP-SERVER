@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "rag": {
+      "command": "/Users/lenpro14/Project/MODULAR-RAG-MCP-SERVER/.venv/bin/python",
+      "args": ["-m", "src.mcp_server.server"]
+    }
+  }
+}
